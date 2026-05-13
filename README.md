@@ -1,67 +1,120 @@
-Updated for v2.9.6: Added an optional website preview PNG export generated from the final stitched pattern grid.
+# SpriteStitcher v2.9.6
 
-Updated for v2.9.4: Pattern Keeper import PDFs avoid numeric chart symbols and use roomier final Symbol Key spacing, to help cases like B5200 assigned to symbol 3.
+SpriteStitcher is a Qt/C++ desktop app for turning sprite images into cross-stitch pattern files.
 
-Updated for v2.9.3: Pattern Keeper import PDFs now include a NikkiPattern-style final page with Thread lengths and Sym / No. / Colour Name symbol key.
+Simple workflow:
 
-Updated for v2.9.2: Pattern Keeper import PDF legend rows now group each symbol and DMC code into one plain text line to improve automatic color matching.
+sprite PNG in -> PDF pattern / Pattern Keeper import PDF / CSV legend / website preview PNG out
 
-Updated for v2.9.1: the Pattern Keeper import PDF now uses the compatible-style chart layout with a chart and DMC table on the same page when it fits.
+## Main features
 
-Updated for v2.9.0: generating a symbol chart now also creates a separate Pattern Keeper import PDF with ASCII symbols and a plain thread key.
+- Create cross-stitch PDF patterns from sprite images.
+- Match sprite colors to nearest DMC floss colors.
+- Generate Pattern Keeper-friendly import PDFs.
+- Generate CSV legend / shopping list files.
+- Generate transparent website preview PNGs.
+- Draw red center lines on charts.
+- Choose color chart, symbol chart, or both.
+- Edit palette mappings before generating.
+- Batch-generate multiple sprite patterns.
+- Use dedicated SpriteStitcher work folders.
 
-Updated for v2.8.9: the Pattern Keeper Thread Key page now uses taller rows and safer spacing so entries do not overlap.
+## Work folders
 
-Updated for v2.8.8: PDFs now include an extra plain black-and-white Pattern Keeper Thread Key page with symbol-to-DMC rows for easier color assignment during import.
+SpriteStitcher uses these folders:
 
-Updated for v2.8.7: choosing a new sprite image now replaces the pattern title with the new sprite filename instead of keeping the previous pattern title.
+- ~/Projects/SpriteStitcherWork/sprites
+- ~/Projects/SpriteStitcherWork/pdfs
+- ~/Projects/SpriteStitcherWork/patterns
+- ~/Projects/SpriteStitcherWork/releases
 
-Updated for v2.8.6: added the DMC 01–35 range so the built-in DMC palette contains 489 standard floss colors.
+The app has shortcut buttons for:
 
-Updated for v2.8.5: expanded the built-in DMC palette so the palette editor replacement list includes the full DMC floss list instead of only the compact matching palette.
+- Use work folders
+- Open sprites
+- Open patterns
 
-Updated for v2.8.4: added selectable chart symbol styles (clean cross-stitch, simple icon symbols, classic SpriteStitch) used by previews, PDFs, and legends.
+## Build dependencies on Arch / EndeavourOS
 
-# SpriteStitcher v2.9.6 Website Preview PNG
+Install the main build tools:
 
-This Linux-focused polish release is based on the stable v2.8.1/v2.8.2 app, but removes the visible batch-processing workflow to keep the interface focused on making one pattern at a time.
+    sudo pacman -S --needed base-devel cmake ninja qt6-base qt6-tools
 
-## What is new in v2.9.6
+For AppImage building:
 
-- Added optional website preview PNG export.
-- Preview PNGs are generated from the final stitched pattern grid, so they respect background removal, DMC matching, palette overrides, and color cleanup.
-- PNG previews use transparent unstitched/background squares and are useful for jesterace.com pattern cards.
-- Removed the Batch queue panel from the main window.
-- Simplified the left-side layout.
-- Kept adjustable left-panel heights and scroll bars.
-- Kept sprite preview, chart preview, zoom controls, palette editing, project save/load, and PDF layout options.
-- Output PDF, CSV, Pattern Keeper PDF, and website preview PNG filenames now use `_v2_9_6`.
+    yay -S linuxdeploy linuxdeploy-plugin-qt
 
-## EndeavourOS / Arch install
+You also need appimagetool available in your PATH.
 
-```bash
-cd ~/Downloads
-rm -rf SpriteStitcher_v2_9_6
-unzip -o SpriteStitcher_v2_9_6.zip
-cd SpriteStitcher_v2_9_6
-./scripts/install-local.sh
-```
+## Build from source
 
-Launch from the menu as **SpriteStitcher**, or run:
+    cd ~/Projects/SpriteStitchCPP_main
+    rm -rf build
+    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+    cmake --build build
 
-```bash
-~/.local/bin/SpriteStitcher
-```
+Run:
 
-## Manual build
+    ./build/SpriteStitcher
 
-```bash
-rm -rf build
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-./build/SpriteStitcher
-```
+## Build the AppImage
 
-## Notes
+Use the included script:
 
-Batch-related data from older `.sstitch` project files is ignored. The rest of the project settings still load normally.
+    cd ~/Projects/SpriteStitchCPP_main
+    ./scripts/build-appimage.sh
+
+This creates:
+
+    SpriteStitcher-v2.9.6-x86_64.AppImage
+
+It also copies the AppImage to:
+
+    ~/Projects/SpriteStitcherWork/releases/
+
+## AppImage notes
+
+The AppImage build script forces Qt to use the XCB platform plugin by default.
+
+This avoids KDE/Wayland launch issues where Qt may ask for the Wayland platform plugin even when the AppImage does not bundle it.
+
+The AppImage build also uses:
+
+    NO_STRIP=1
+    QMAKE=/usr/bin/qmake6
+
+These avoid packaging problems on newer Arch-based systems.
+
+## Project file compatibility
+
+New project files use the SpriteStitcher project type.
+
+Older SpriteStitchCPPProject files are still accepted so old .sstitch files continue to load.
+
+Saved settings intentionally still use the old internal settings name for now so existing user settings are preserved.
+
+## Version history
+
+### v2.9.6
+
+- Renamed app branding to SpriteStitcher.
+- Updated window title to SpriteStitcher v2.9.6.
+- Added work folder shortcut buttons.
+- Added Linux desktop launcher.
+- Added SVG app icon.
+- Added repeatable AppImage build script.
+- Added AppImage release workflow.
+- Preserved old project/settings compatibility.
+
+### v2.9.5
+
+- Added website preview PNG export.
+- Pattern output filenames used _v2_9_5.
+
+### v2.9.4 and earlier
+
+- Improved Pattern Keeper import PDFs.
+- Improved symbol-key spacing.
+- Added Pattern Keeper-friendly thread key pages.
+- Added expanded DMC support.
+- Added selectable chart symbol styles.
