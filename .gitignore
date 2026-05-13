@@ -1,3 +1,8 @@
 
 # Build output
 build/
+
+# Build/package output
+build/
+dist/
+*.AppImage
