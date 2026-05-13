@@ -1,0 +1,30 @@
+cmake_minimum_required(VERSION 3.22)
+
+project(SpriteStitchCPP VERSION 2.9.5 LANGUAGES CXX)
+
+include(GNUInstallDirs)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
+find_package(Qt6 REQUIRED COMPONENTS Widgets Gui Core)
+
+add_executable(SpriteStitchCPP
+    src/main.cpp
+    src/MainWindow.cpp
+    src/MainWindow.h
+    src/PatternEngine.cpp
+    src/PatternEngine.h
+    resources/resources.qrc
+)
+
+target_link_libraries(SpriteStitchCPP PRIVATE Qt6::Widgets Qt6::Gui Qt6::Core)
+
+target_compile_definitions(SpriteStitchCPP PRIVATE APP_VERSION="${PROJECT_VERSION}")
+
+install(TARGETS SpriteStitchCPP RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES resources/spritestitchcpp.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+install(FILES resources/spritestitchcpp.svg DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)

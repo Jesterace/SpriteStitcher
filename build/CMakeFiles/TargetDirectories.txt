@@ -1,0 +1,9 @@
+/home/jared/Projects/SpriteStitchCPP_v2_9_5_png_export/build/CMakeFiles/SpriteStitchCPP.dir
+/home/jared/Projects/SpriteStitchCPP_v2_9_5_png_export/build/CMakeFiles/edit_cache.dir
+/home/jared/Projects/SpriteStitchCPP_v2_9_5_png_export/build/CMakeFiles/rebuild_cache.dir
+/home/jared/Projects/SpriteStitchCPP_v2_9_5_png_export/build/CMakeFiles/list_install_components.dir
+/home/jared/Projects/SpriteStitchCPP_v2_9_5_png_export/build/CMakeFiles/install.dir
+/home/jared/Projects/SpriteStitchCPP_v2_9_5_png_export/build/CMakeFiles/install/local.dir
+/home/jared/Projects/SpriteStitchCPP_v2_9_5_png_export/build/CMakeFiles/install/strip.dir
+/home/jared/Projects/SpriteStitchCPP_v2_9_5_png_export/build/CMakeFiles/SpriteStitchCPP_autogen_timestamp_deps.dir
+/home/jared/Projects/SpriteStitchCPP_v2_9_5_png_export/build/CMakeFiles/SpriteStitchCPP_autogen.dir

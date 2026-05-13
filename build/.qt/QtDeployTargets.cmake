@@ -1,0 +1,2 @@
+set(__QT_DEPLOY_TARGET_SpriteStitchCPP_FILE /home/jared/Projects/SpriteStitchCPP_v2_9_5_png_export/build/SpriteStitchCPP)
+set(__QT_DEPLOY_TARGET_SpriteStitchCPP_TYPE EXECUTABLE)

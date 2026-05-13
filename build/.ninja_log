@@ -1,0 +1,13 @@
+# ninja log v7
+2	411	1778634425106919485	SpriteStitchCPP_autogen/timestamp	dce5a0a779a94ec2
+2	411	1778634425106919485	SpriteStitchCPP_autogen/mocs_compilation.cpp	dce5a0a779a94ec2
+2	411	1778634425106919485	/home/jared/Projects/SpriteStitchCPP_v2_9_5_png_export/build/SpriteStitchCPP_autogen/timestamp	dce5a0a779a94ec2
+2	411	1778634425106919485	/home/jared/Projects/SpriteStitchCPP_v2_9_5_png_export/build/SpriteStitchCPP_autogen/mocs_compilation.cpp	dce5a0a779a94ec2
+413	436	1778634425144880898	SpriteStitchCPP_autogen/3YJK5W5UP7/qrc_resources.cpp	86932afe2c033ed8
+413	436	1778634425144880898	/home/jared/Projects/SpriteStitchCPP_v2_9_5_png_export/build/SpriteStitchCPP_autogen/3YJK5W5UP7/qrc_resources.cpp	86932afe2c033ed8
+437	476	1778634425147983845	CMakeFiles/SpriteStitchCPP.dir/SpriteStitchCPP_autogen/3YJK5W5UP7/qrc_resources.cpp.o	6681bee8e4b4075
+436	2849	1778634425146922769	CMakeFiles/SpriteStitchCPP.dir/src/main.cpp.o	f1d994ae55de9a77
+436	2891	1778634425145919925	CMakeFiles/SpriteStitchCPP.dir/SpriteStitchCPP_autogen/mocs_compilation.cpp.o	7559ea43944d70e2
+437	9368	1778634425147672889	CMakeFiles/SpriteStitchCPP.dir/src/PatternEngine.cpp.o	f3c55199afe296ff
+436	10868	1778634425147214583	CMakeFiles/SpriteStitchCPP.dir/src/MainWindow.cpp.o	6c7a9b52473ca59a
+10869	11169	1778634435579037570	SpriteStitchCPP	8b2e133fe5378dc6

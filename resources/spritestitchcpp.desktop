@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=SpriteStitch C++
+Comment=Generate cross-stitch PDF patterns from sprite PNGs with editable palette controls
+Exec=SpriteStitchCPP
+Icon=spritestitchcpp
+Terminal=false
+Type=Application
+Categories=Graphics;RasterGraphics;Qt;
+Keywords=cross-stitch;sprite;pixel;pdf;DMC;
+StartupNotify=true
