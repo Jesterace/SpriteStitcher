@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(SpriteStitchCPP VERSION 2.9.5 LANGUAGES CXX)
+project(SpriteStitcher VERSION 2.9.6 LANGUAGES CXX)
 
 include(GNUInstallDirs)
 
@@ -12,7 +12,7 @@ set(CMAKE_AUTOUIC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Gui Core)
 
-add_executable(SpriteStitchCPP
+add_executable(SpriteStitcher
     src/main.cpp
     src/MainWindow.cpp
     src/MainWindow.h
@@ -21,10 +21,10 @@ add_executable(SpriteStitchCPP
     resources/resources.qrc
 )
 
-target_link_libraries(SpriteStitchCPP PRIVATE Qt6::Widgets Qt6::Gui Qt6::Core)
+target_link_libraries(SpriteStitcher PRIVATE Qt6::Widgets Qt6::Gui Qt6::Core)
 
-target_compile_definitions(SpriteStitchCPP PRIVATE APP_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(SpriteStitcher PRIVATE APP_VERSION="${PROJECT_VERSION}")
 
-install(TARGETS SpriteStitchCPP RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS SpriteStitcher RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES resources/spritestitchcpp.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES resources/spritestitchcpp.svg DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)

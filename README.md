@@ -1,4 +1,4 @@
-Updated for v2.9.5: Added an optional website preview PNG export generated from the final stitched pattern grid.
+Updated for v2.9.6: Added an optional website preview PNG export generated from the final stitched pattern grid.
 
 Updated for v2.9.4: Pattern Keeper import PDFs avoid numeric chart symbols and use roomier final Symbol Key spacing, to help cases like B5200 assigned to symbol 3.
 
@@ -22,11 +22,11 @@ Updated for v2.8.5: expanded the built-in DMC palette so the palette editor repl
 
 Updated for v2.8.4: added selectable chart symbol styles (clean cross-stitch, simple icon symbols, classic SpriteStitch) used by previews, PDFs, and legends.
 
-# SpriteStitch C++ v2.9.5 Website Preview PNG
+# SpriteStitcher v2.9.6 Website Preview PNG
 
 This Linux-focused polish release is based on the stable v2.8.1/v2.8.2 app, but removes the visible batch-processing workflow to keep the interface focused on making one pattern at a time.
 
-## What is new in v2.9.5
+## What is new in v2.9.6
 
 - Added optional website preview PNG export.
 - Preview PNGs are generated from the final stitched pattern grid, so they respect background removal, DMC matching, palette overrides, and color cleanup.
@@ -35,22 +35,22 @@ This Linux-focused polish release is based on the stable v2.8.1/v2.8.2 app, but 
 - Simplified the left-side layout.
 - Kept adjustable left-panel heights and scroll bars.
 - Kept sprite preview, chart preview, zoom controls, palette editing, project save/load, and PDF layout options.
-- Output PDF, CSV, Pattern Keeper PDF, and website preview PNG filenames now use `_v2_9_5`.
+- Output PDF, CSV, Pattern Keeper PDF, and website preview PNG filenames now use `_v2_9_6`.
 
 ## EndeavourOS / Arch install
 
 ```bash
 cd ~/Downloads
-rm -rf SpriteStitchCPP_v2_9_5
-unzip -o SpriteStitchCPP_v2_9_5.zip
-cd SpriteStitchCPP_v2_9_5
+rm -rf SpriteStitcher_v2_9_6
+unzip -o SpriteStitcher_v2_9_6.zip
+cd SpriteStitcher_v2_9_6
 ./scripts/install-local.sh
 ```
 
-Launch from the menu as **SpriteStitch C++**, or run:
+Launch from the menu as **SpriteStitcher**, or run:
 
 ```bash
-~/.local/bin/SpriteStitchCPP
+~/.local/bin/SpriteStitcher
 ```
 
 ## Manual build
@@ -59,7 +59,7 @@ Launch from the menu as **SpriteStitch C++**, or run:
 rm -rf build
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-./build/SpriteStitchCPP
+./build/SpriteStitcher
 ```
 
 ## Notes

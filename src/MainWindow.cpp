@@ -79,7 +79,7 @@ QTableWidgetItem *readOnlyNumberItem(int value) {
 }
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
-    setWindowTitle(QString("SpriteStitch C++ v%1 — Pattern Keeper No-Number Symbols").arg(APP_VERSION));
+    setWindowTitle(QString("SpriteStitcher v%1").arg(APP_VERSION));
     setWindowIcon(QIcon(":/spritestitchcpp.svg"));
     buildUi();
     loadSettings();
@@ -443,7 +443,7 @@ void MainWindow::buildUi() {
     updateBackgroundSwatch();
     updateColorCleanupControls();
     updatePreview();
-    logLine("Ready. v2.9.5 Pattern Keeper No-Number Symbols: import PDFs avoid numeric symbols and use roomier symbol-key spacing.");
+    logLine(QString("Ready. SpriteStitcher v%1. Pattern Keeper import PDFs, website preview PNGs, CSV legends, and work-folder shortcuts are ready.").arg(APP_VERSION));
 }
 
 void MainWindow::resizeEvent(QResizeEvent *event) {
@@ -1444,7 +1444,7 @@ void MainWindow::setComboByData(QComboBox *combo, const QVariant &value, int fal
 
 QJsonObject MainWindow::projectToJson() const {
     QJsonObject root;
-    root[QStringLiteral("fileType")] = QStringLiteral("SpriteStitchCPPProject");
+    root[QStringLiteral("fileType")] = QStringLiteral("SpriteStitcherProject");
     root[QStringLiteral("formatVersion")] = 1;
     root[QStringLiteral("appVersion")] = QStringLiteral(APP_VERSION);
     root[QStringLiteral("spriteImage")] = m_imageEdit->text().trimmed();
@@ -1519,7 +1519,7 @@ QJsonObject MainWindow::projectToJson() const {
 
 bool MainWindow::applyProjectJson(const QJsonObject &project, QString *errorMessage) {
     const QString fileType = project.value(QStringLiteral("fileType")).toString();
-    if (fileType != QStringLiteral("SpriteStitchCPPProject")) {
+    if (fileType != QStringLiteral("SpriteStitchCPPProject") && fileType != QStringLiteral("SpriteStitcherProject")) {
         if (errorMessage) *errorMessage = QStringLiteral("This does not look like a SpriteStitch .sstitch project file.");
         return false;
     }
