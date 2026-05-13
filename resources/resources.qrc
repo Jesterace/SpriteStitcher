@@ -1,5 +1,5 @@
 <RCC>
     <qresource prefix="/">
-        <file>spritestitchcpp.svg</file>
+        <file>spritestitcher.svg</file>
     </qresource>
 </RCC>

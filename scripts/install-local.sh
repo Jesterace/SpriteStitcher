@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="SpriteStitchCPP"
-DESKTOP_ID="spritestitchcpp.desktop"
+APP_NAME="SpriteStitcher"
+DESKTOP_ID="spritestitcher.desktop"
 PREFIX="${HOME}/.local"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -24,7 +24,7 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 
 install -Dm755 "build/${APP_NAME}" "${PREFIX}/bin/${APP_NAME}"
-install -Dm644 "resources/spritestitchcpp.svg" "${PREFIX}/share/icons/hicolor/scalable/apps/spritestitchcpp.svg"
+install -Dm644 "resources/spritestitcher.svg" "${PREFIX}/share/icons/hicolor/scalable/apps/spritestitcher.svg"
 mkdir -p "${PREFIX}/share/applications"
 sed \
     -e "s|^Exec=.*|Exec=${PREFIX}/bin/${APP_NAME}|" \
@@ -41,7 +41,7 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
 fi
 
 echo
-echo "Installed SpriteStitch C++ to: ${PREFIX}/bin/${APP_NAME}"
+echo "Installed SpriteStitcher to: ${PREFIX}/bin/${APP_NAME}"
 echo "Menu launcher installed to: ${PREFIX}/share/applications/${DESKTOP_ID}"
 echo "You may need to log out/in or restart your app menu if it does not appear immediately."
 echo "Run from terminal with: ${PREFIX}/bin/${APP_NAME}"

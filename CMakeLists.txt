@@ -26,5 +26,10 @@ target_link_libraries(SpriteStitcher PRIVATE Qt6::Widgets Qt6::Gui Qt6::Core)
 target_compile_definitions(SpriteStitcher PRIVATE APP_VERSION="${PROJECT_VERSION}")
 
 install(TARGETS SpriteStitcher RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(FILES resources/spritestitchcpp.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
-install(FILES resources/spritestitchcpp.svg DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
+
+install(FILES packaging/linux/spritestitcher.desktop
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications)
+
+install(FILES packaging/icons/spritestitcher.svg
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/scalable/apps)
+

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=SpriteStitcher
+Comment=Create cross-stitch PDF patterns from sprite images
+Exec=SpriteStitcher
+Icon=spritestitcher
+Terminal=false
+Categories=Graphics;Utility;
+StartupNotify=true

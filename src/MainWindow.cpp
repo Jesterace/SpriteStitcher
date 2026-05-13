@@ -80,7 +80,7 @@ QTableWidgetItem *readOnlyNumberItem(int value) {
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     setWindowTitle(QString("SpriteStitcher v%1").arg(APP_VERSION));
-    setWindowIcon(QIcon(":/spritestitchcpp.svg"));
+    setWindowIcon(QIcon(":/spritestitcher.svg"));
     buildUi();
     loadSettings();
 }

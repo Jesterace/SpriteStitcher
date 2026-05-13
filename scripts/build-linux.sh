@@ -6,5 +6,5 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 
 echo
-echo "Built: ./build/SpriteStitchCPP"
-echo "Run:   ./build/SpriteStitchCPP"
+echo "Built: ./build/SpriteStitcher"
+echo "Run:   ./build/SpriteStitcher"
