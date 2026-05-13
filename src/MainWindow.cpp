@@ -263,11 +263,17 @@ void MainWindow::buildUi() {
     m_reviewPaletteButton = new QPushButton("Edit palette...", buttonRow);
     auto *saveProjectButton = new QPushButton("Save project...", buttonRow);
     auto *loadProjectButton = new QPushButton("Load project...", buttonRow);
+    auto *useWorkFoldersButton = new QPushButton("Use work folders", buttonRow);
+    auto *openSpritesButton = new QPushButton("Open sprites", buttonRow);
+    auto *openPatternsButton = new QPushButton("Open patterns", buttonRow);
     auto *resetButton = new QPushButton("Reset saved settings", buttonRow);
     buttonLayout->addWidget(m_generateButton);
     buttonLayout->addWidget(m_reviewPaletteButton);
     buttonLayout->addWidget(saveProjectButton);
     buttonLayout->addWidget(loadProjectButton);
+    buttonLayout->addWidget(useWorkFoldersButton);
+    buttonLayout->addWidget(openSpritesButton);
+    buttonLayout->addWidget(openPatternsButton);
     buttonLayout->addWidget(m_openPdfButton);
     buttonLayout->addWidget(m_openFolderButton);
     buttonLayout->addStretch(1);
@@ -412,6 +418,9 @@ void MainWindow::buildUi() {
     connect(m_openFolderButton, &QPushButton::clicked, this, &MainWindow::openOutputFolder);
     connect(saveProjectButton, &QPushButton::clicked, this, &MainWindow::saveProject);
     connect(loadProjectButton, &QPushButton::clicked, this, &MainWindow::loadProject);
+    connect(useWorkFoldersButton, &QPushButton::clicked, this, &MainWindow::useJesteraceWorkFolders);
+    connect(openSpritesButton, &QPushButton::clicked, this, &MainWindow::openSpritesFolder);
+    connect(openPatternsButton, &QPushButton::clicked, this, &MainWindow::openPatternsFolder);
     connect(m_reviewPaletteButton, &QPushButton::clicked, this, &MainWindow::reviewPalette);
     connect(resetButton, &QPushButton::clicked, this, &MainWindow::resetSettings);
     connect(m_backgroundMode, &QComboBox::currentIndexChanged, this, &MainWindow::updateBackgroundSwatch);
@@ -927,6 +936,58 @@ PatternOptions MainWindow::collectOptions() const {
     options.includeCoverPage = m_coverPageCheck->isChecked();
     return options;
 }
+
+
+void MainWindow::useJesteraceWorkFolders() {
+    const QString base = QDir::homePath() + QStringLiteral("/Projects/SpriteStitcherWork");
+    const QString sprites = base + QStringLiteral("/sprites");
+    const QString pdfs = base + QStringLiteral("/pdfs");
+    const QString patterns = base + QStringLiteral("/patterns");
+
+    QDir().mkpath(sprites);
+    QDir().mkpath(pdfs);
+    QDir().mkpath(patterns);
+
+    if (m_outputEdit) {
+        m_outputEdit->setText(pdfs);
+    }
+
+    if (m_imageEdit && m_imageEdit->text().trimmed().isEmpty()) {
+        QDir spriteDir(sprites);
+        const QStringList filters = QStringList()
+                << QStringLiteral("*.png") << QStringLiteral("*.PNG")
+                << QStringLiteral("*.bmp") << QStringLiteral("*.BMP")
+                << QStringLiteral("*.gif") << QStringLiteral("*.GIF")
+                << QStringLiteral("*.jpg") << QStringLiteral("*.JPG")
+                << QStringLiteral("*.jpeg") << QStringLiteral("*.JPEG");
+        const QFileInfoList files = spriteDir.entryInfoList(filters, QDir::Files, QDir::Name);
+        if (!files.isEmpty()) {
+            m_imageEdit->setText(files.first().absoluteFilePath());
+        }
+    }
+
+    saveSettings();
+    updateSpriteInfo();
+    updatePreview();
+
+    logLine(QStringLiteral("Using SpriteStitcher work folders: ") + base);
+    logLine(QStringLiteral("Sprites folder: ") + sprites);
+    logLine(QStringLiteral("PDF output folder: ") + pdfs);
+    logLine(QStringLiteral("Project/pattern folder: ") + patterns);
+}
+
+void MainWindow::openSpritesFolder() {
+    const QString folder = QDir::homePath() + QStringLiteral("/Projects/SpriteStitcherWork/sprites");
+    QDir().mkpath(folder);
+    QDesktopServices::openUrl(QUrl::fromLocalFile(folder));
+}
+
+void MainWindow::openPatternsFolder() {
+    const QString folder = QDir::homePath() + QStringLiteral("/Projects/SpriteStitcherWork/patterns");
+    QDir().mkpath(folder);
+    QDesktopServices::openUrl(QUrl::fromLocalFile(folder));
+}
+
 
 void MainWindow::generate() {
     const QString imagePath = m_imageEdit->text().trimmed();

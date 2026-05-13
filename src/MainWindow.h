@@ -36,6 +36,9 @@ protected:
 private slots:
     void browseImage();
     void chooseOutputFolder();
+    void useJesteraceWorkFolders();
+    void openSpritesFolder();
+    void openPatternsFolder();
     void chooseBackgroundColor();
     void generate();
     void openGeneratedPdf();
