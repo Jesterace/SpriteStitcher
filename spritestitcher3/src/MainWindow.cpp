@@ -339,7 +339,7 @@ void MainWindow::exportPdf() {
     const QString path = withPdfSuffix(dialog.selectedFiles().first());
 
     QString error;
-    if (!m_patternModel.writePdfFile(path, imageName, currentChartCellSize(), &error, currentChartMode())) {
+    if (!m_patternModel.writePdfFile(path, imageName, currentChartCellSize(), &error)) {
         QMessageBox::warning(
             this,
             QStringLiteral("Export PDF"),

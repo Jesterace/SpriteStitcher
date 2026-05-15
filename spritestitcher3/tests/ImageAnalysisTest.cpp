@@ -9,6 +9,8 @@
 #include <QDir>
 #include <QFile>
 #include <QImage>
+#include <QProcess>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 
 namespace {
@@ -68,6 +70,17 @@ bool cellContainsHighContrastSymbolPixel(const QImage &image, const QRect &cell)
             const bool light = pixel.red() >= 245 && pixel.green() >= 245 && pixel.blue() >= 245;
             const bool dark = pixel.red() <= 40 && pixel.green() <= 40 && pixel.blue() <= 40;
             if (light || dark) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool cellPixelsDiffer(const QImage &left, const QImage &right, const QRect &cell) {
+    for (int y = cell.top(); y <= cell.bottom(); ++y) {
+        for (int x = cell.left(); x <= cell.right(); ++x) {
+            if (left.pixelColor(x, y) != right.pixelColor(x, y)) {
                 return true;
             }
         }
@@ -390,6 +403,9 @@ int main(int argc, char *argv[]) {
     if (!cellIsSolidColor(colorsOnlyChart, QRect(1, 1, 8, 8), redFill)) {
         return fail(QStringLiteral("Colors Only chart should not draw symbol pixels."));
     }
+    if (!cellPixelsDiffer(stitchChart, colorsOnlyChart, QRect(1, 1, 8, 8))) {
+        return fail(QStringLiteral("Color + Symbols chart should not render the same stitch-cell pixels as Colors Only."));
+    }
 
     const QString chartPngPath = QDir(tempDir.path()).filePath(QStringLiteral("chart.png"));
     QString chartPngError;
@@ -461,7 +477,7 @@ int main(int argc, char *argv[]) {
 
     const QString pdfPath = QDir(tempDir.path()).filePath(QStringLiteral("pattern.pdf"));
     QString pdfError;
-    if (!pattern.writePdfFile(pdfPath, QStringLiteral("Test Sprite"), 10, &pdfError, ChartMode::ColorsOnly)) {
+    if (!pattern.writePdfFile(pdfPath, QStringLiteral("Test Sprite"), 10, &pdfError)) {
         return fail(QStringLiteral("Pattern PDF write failed: ") + pdfError);
     }
 
@@ -482,6 +498,29 @@ int main(int argc, char *argv[]) {
         pdfBytes.contains("Grid labels appear every 10 stitches.") ||
         pdfBytes.contains("v2.9.5")) {
         return fail(QStringLiteral("Pattern PDF should not contain legacy debug/status text."));
+    }
+    const QString pdfToText = QStandardPaths::findExecutable(QStringLiteral("pdftotext"));
+    if (!pdfToText.isEmpty()) {
+        const QString pdfTextPath = QDir(tempDir.path()).filePath(QStringLiteral("pattern.txt"));
+        const int exitCode = QProcess::execute(pdfToText, {pdfPath, pdfTextPath});
+        if (exitCode != 0) {
+            return fail(QStringLiteral("pdftotext could not read the generated PDF."));
+        }
+        QFile pdfTextFile(pdfTextPath);
+        if (!pdfTextFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            return fail(QStringLiteral("Could not read generated PDF text."));
+        }
+        const QString pdfText = QString::fromUtf8(pdfTextFile.readAll());
+        const qsizetype colorChartIndex = pdfText.indexOf(QStringLiteral("Color Chart"));
+        const qsizetype symbolChartIndex = pdfText.indexOf(QStringLiteral("Black-and-White Symbol Chart"));
+        const qsizetype firstLegendIndex = pdfText.indexOf(QStringLiteral("Legend"), colorChartIndex);
+        const qsizetype secondLegendIndex = pdfText.indexOf(QStringLiteral("Legend"), symbolChartIndex);
+        if (colorChartIndex < 0 || symbolChartIndex < 0 || firstLegendIndex < 0 || secondLegendIndex < 0) {
+            return fail(QStringLiteral("Pattern PDF should include both chart section titles and the legend title."));
+        }
+        if (!(colorChartIndex < firstLegendIndex && firstLegendIndex < symbolChartIndex && symbolChartIndex < secondLegendIndex)) {
+            return fail(QStringLiteral("Pattern PDF should place a side legend with each chart page."));
+        }
     }
 
     const PatternModel emptyPattern = PatternModel::fromImage(QImage());
