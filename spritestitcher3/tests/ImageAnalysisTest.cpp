@@ -215,6 +215,15 @@ int main(int argc, char *argv[]) {
         + QStringLiteral("A,#E31D42FF; #E41D42FF,2,666,Bright Red,3\n")
         + QStringLiteral("B,#47A72FFF,1,702,Kelly Green,1\n");
     if (pattern.toCsv() != expectedCsv) return fail(QStringLiteral("Pattern CSV output was wrong."));
+    if (pattern.finishedSizeText(14) != QStringLiteral("14-count Aida: 0.29 x 0.14 in")) {
+        return fail(QStringLiteral("14-count finished size text was wrong."));
+    }
+    if (pattern.finishedSizeText(16) != QStringLiteral("16-count Aida: 0.25 x 0.13 in")) {
+        return fail(QStringLiteral("16-count finished size text was wrong."));
+    }
+    if (pattern.finishedSizeText(18) != QStringLiteral("18-count Aida: 0.22 x 0.11 in")) {
+        return fail(QStringLiteral("18-count finished size text was wrong."));
+    }
 
     const QString csvPath = QDir(tempDir.path()).filePath(QStringLiteral("palette.csv"));
     QString csvError;

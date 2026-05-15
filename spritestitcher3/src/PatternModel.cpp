@@ -19,6 +19,17 @@ int pointsToPixels(double points, int dpi) {
     return static_cast<int>(std::round(points * dpi / 72.0));
 }
 
+QString formatInches(double inches) {
+    QString text = QString::number(inches, 'f', 2);
+    while (text.contains(QLatin1Char('.')) && text.endsWith(QLatin1Char('0'))) {
+        text.chop(1);
+    }
+    if (text.endsWith(QLatin1Char('.'))) {
+        text.chop(1);
+    }
+    return text;
+}
+
 QString csvEscape(const QString &value) {
     QString escaped = value;
     escaped.replace(QStringLiteral("\""), QStringLiteral("\"\""));
@@ -143,6 +154,17 @@ int PatternModel::uniqueSpriteColorCount() const {
 
 int PatternModel::matchedColorCount() const {
     return matchedColors.size();
+}
+
+QString PatternModel::finishedSizeText(int fabricCount) const {
+    if (fabricCount <= 0 || imageWidth <= 0 || imageHeight <= 0) {
+        return QString();
+    }
+
+    return QStringLiteral("%1-count Aida: %2 x %3 in")
+        .arg(fabricCount)
+        .arg(formatInches(static_cast<double>(imageWidth) / fabricCount),
+             formatInches(static_cast<double>(imageHeight) / fabricCount));
 }
 
 QImage PatternModel::renderChartPreview(int cellSize, bool drawCenterLines) const {
@@ -274,11 +296,13 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
 
     const QRect content = writer.pageLayout().paintRectPixels(dpi);
     const int gap = pointsToPixels(10, dpi);
+    const int smallGap = pointsToPixels(5, dpi);
+    const int contentBottom = content.top() + content.height();
     int y = content.top();
 
     QFont titleFont = painter.font();
     titleFont.setBold(true);
-    titleFont.setPointSize(16);
+    titleFont.setPointSize(18);
     painter.setFont(titleFont);
     painter.setPen(Qt::black);
     const QString title = imageName.trimmed().isEmpty()
@@ -288,46 +312,69 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
     painter.drawText(QRect(content.left(), y, content.width(), titleHeight),
                      Qt::AlignLeft | Qt::AlignVCenter,
                      title);
-    y += titleHeight + pointsToPixels(4, dpi);
+    y += titleHeight + smallGap;
 
     QFont bodyFont = painter.font();
     bodyFont.setBold(false);
     bodyFont.setPointSize(10);
     painter.setFont(bodyFont);
     const int bodyHeight = painter.fontMetrics().height();
-    painter.drawText(QRect(content.left(), y, content.width(), bodyHeight),
-                     Qt::AlignLeft | Qt::AlignVCenter,
-                     QStringLiteral("Pattern size: %1 x %2 stitches").arg(imageWidth).arg(imageHeight));
-    y += bodyHeight;
-    painter.drawText(QRect(content.left(), y, content.width(), bodyHeight),
-                     Qt::AlignLeft | Qt::AlignVCenter,
-                     QStringLiteral("Total stitch count: %1").arg(opaqueStitchPixels));
-    y += bodyHeight + gap;
+    const QStringList summaryLines{
+        QStringLiteral("Pattern size: %1 x %2 stitches").arg(imageWidth).arg(imageHeight),
+        QStringLiteral("Total stitch count: %1").arg(opaqueStitchPixels),
+        finishedSizeText(14),
+        finishedSizeText(16),
+        finishedSizeText(18)
+    };
+
+    const int summaryPadding = pointsToPixels(7, dpi);
+    const int summaryLineGap = pointsToPixels(2, dpi);
+    const int summaryHeight = summaryPadding * 2
+        + summaryLines.size() * bodyHeight
+        + (summaryLines.size() - 1) * summaryLineGap;
+    const QRect summaryRect(content.left(), y, content.width(), summaryHeight);
+    painter.fillRect(summaryRect, QColor(248, 248, 248));
+    painter.setPen(QColor(190, 190, 190));
+    painter.drawRect(summaryRect);
+    painter.setPen(Qt::black);
+
+    int summaryY = summaryRect.top() + summaryPadding;
+    for (const QString &line : summaryLines) {
+        painter.drawText(QRect(summaryRect.left() + summaryPadding, summaryY,
+                               summaryRect.width() - summaryPadding * 2, bodyHeight),
+                         Qt::AlignLeft | Qt::AlignVCenter,
+                         line);
+        summaryY += bodyHeight + summaryLineGap;
+    }
+    y = summaryRect.bottom() + gap;
+
+    QFont legendTitleFont = painter.font();
+    legendTitleFont.setBold(true);
+    legendTitleFont.setPointSize(12);
+    QFont legendHeaderFont = painter.font();
+    legendHeaderFont.setBold(true);
+    legendHeaderFont.setPointSize(9);
+    QFont legendRowFont = painter.font();
+    legendRowFont.setBold(false);
+    legendRowFont.setPointSize(9);
+    const int legendTitleHeight = QFontMetrics(legendTitleFont).height();
+    const int rowHeight = pointsToPixels(22, dpi);
+    const int preferredLegendRows = std::min(std::max(1, static_cast<int>(matchedColors.size())), 8);
+    const int legendReservedHeight = legendTitleHeight + smallGap + rowHeight * (preferredLegendRows + 1);
 
     QSize chartTargetSize = chart.size();
-    chartTargetSize.scale(content.width(), pointsToPixels(360, dpi), Qt::KeepAspectRatio);
+    const int chartMaxHeight = std::max(pointsToPixels(120, dpi),
+                                        contentBottom - y - gap - legendReservedHeight);
+    chartTargetSize.scale(content.width(), chartMaxHeight, Qt::KeepAspectRatio);
     const QRect chartRect(content.left(), y, chartTargetSize.width(), chartTargetSize.height());
     painter.drawImage(chartRect, chart);
     y = chartRect.bottom() + gap;
 
-    QFont sectionFont = painter.font();
-    sectionFont.setBold(true);
-    sectionFont.setPointSize(12);
-    painter.setFont(sectionFont);
-    const int sectionHeight = painter.fontMetrics().height();
-    painter.drawText(QRect(content.left(), y, content.width(), sectionHeight),
-                     Qt::AlignLeft | Qt::AlignVCenter,
-                     QStringLiteral("Legend"));
-    y += sectionHeight + pointsToPixels(4, dpi);
-
-    bodyFont.setPointSize(9);
-    painter.setFont(bodyFont);
-    const int rowHeight = pointsToPixels(20, dpi);
     const int tableWidth = content.width();
     const int symbolWidth = tableWidth * 12 / 100;
-    const int codeWidth = tableWidth * 18 / 100;
-    const int nameWidth = tableWidth * 38 / 100;
-    const int countWidth = tableWidth * 18 / 100;
+    const int codeWidth = tableWidth * 16 / 100;
+    const int nameWidth = tableWidth * 40 / 100;
+    const int countWidth = tableWidth * 16 / 100;
     const int swatchWidth = tableWidth - symbolWidth - codeWidth - nameWidth - countWidth;
     QVector<int> columnWidths{symbolWidth, codeWidth, nameWidth, countWidth, swatchWidth};
     QStringList headers{
@@ -338,10 +385,25 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
         QStringLiteral("Swatch")
     };
 
+    auto newPage = [&]() -> bool {
+        if (!writer.newPage()) {
+            if (errorMessage) {
+                *errorMessage = QStringLiteral("Could not add a page to the PDF.");
+            }
+            return false;
+        }
+        y = content.top();
+        return true;
+    };
+
     auto drawRow = [&](const QStringList &values, const QColor &swatchColor, bool header) {
         int x = content.left();
+        const QFont previousFont = painter.font();
         if (header) {
             painter.fillRect(QRect(x, y, tableWidth, rowHeight), QColor(235, 235, 235));
+            painter.setFont(legendHeaderFont);
+        } else {
+            painter.setFont(legendRowFont);
         }
         painter.setPen(QColor(170, 170, 170));
         painter.drawRect(QRect(x, y, tableWidth, rowHeight));
@@ -360,17 +422,49 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
                 painter.setPen(Qt::black);
                 painter.drawRect(swatch);
             } else {
-                drawElidedText(painter, cell, values.value(i), Qt::AlignLeft | Qt::AlignVCenter);
+                int flags = Qt::AlignLeft | Qt::AlignVCenter;
+                if (i == 0) {
+                    flags = Qt::AlignCenter;
+                } else if (i == 3) {
+                    flags = Qt::AlignRight | Qt::AlignVCenter;
+                }
+                drawElidedText(painter, cell, values.value(i), flags);
             }
             x += columnWidths[i];
         }
+        painter.setFont(previousFont);
         y += rowHeight;
     };
 
-    drawRow(headers, QColor(), true);
+    auto drawLegendHeader = [&](bool continued) -> bool {
+        const int requiredHeight = legendTitleHeight + smallGap + rowHeight;
+        if (y + requiredHeight > contentBottom) {
+            if (!newPage()) {
+                return false;
+            }
+        }
+        painter.setFont(legendTitleFont);
+        painter.setPen(Qt::black);
+        const QString heading = continued ? QStringLiteral("Legend (continued)") : QStringLiteral("Legend");
+        painter.drawText(QRect(content.left(), y, content.width(), legendTitleHeight),
+                         Qt::AlignLeft | Qt::AlignVCenter,
+                         heading);
+        y += legendTitleHeight + smallGap;
+        drawRow(headers, QColor(), true);
+        return true;
+    };
+
+    if (!drawLegendHeader(false)) {
+        painter.end();
+        return false;
+    }
+
     for (const PatternMatchedColor &matched : matchedColors) {
-        if (y + rowHeight > content.bottom()) {
-            break;
+        if (y + rowHeight > contentBottom) {
+            if (!newPage() || !drawLegendHeader(true)) {
+                painter.end();
+                return false;
+            }
         }
         drawRow({
             matched.symbol,
