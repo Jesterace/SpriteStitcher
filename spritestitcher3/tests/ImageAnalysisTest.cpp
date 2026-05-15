@@ -246,6 +246,59 @@ int main(int argc, char *argv[]) {
     const QImage stitchChart = pattern.renderChartPreview(10);
     if (stitchChart.pixelColor(2, 2) == QColor(Qt::white)) return fail(QStringLiteral("Stitch cell should not render as blank white."));
 
+    const QString chartPngPath = QDir(tempDir.path()).filePath(QStringLiteral("chart.png"));
+    QString chartPngError;
+    if (!pattern.writeChartPngFile(chartPngPath, 10, &chartPngError)) {
+        return fail(QStringLiteral("Pattern chart PNG write failed: ") + chartPngError);
+    }
+
+    QFile chartPngFile(chartPngPath);
+    if (!chartPngFile.exists() || chartPngFile.size() <= 0) {
+        return fail(QStringLiteral("Pattern chart PNG file was not written."));
+    }
+
+    QImage exportedChart;
+    if (!exportedChart.load(chartPngPath, "PNG")) {
+        return fail(QStringLiteral("Pattern chart PNG could not be reloaded."));
+    }
+    if (exportedChart.size() != QSize(40, 20)) {
+        return fail(QStringLiteral("Pattern chart PNG dimensions were wrong."));
+    }
+    if (exportedChart.pixelColor(2, 2) == QColor(Qt::white)) {
+        return fail(QStringLiteral("Pattern chart PNG should contain colored stitch cells."));
+    }
+    if (exportedChart.pixelColor(35, 15) != QColor(Qt::white)) {
+        return fail(QStringLiteral("Pattern chart PNG should contain blank no-stitch cells."));
+    }
+    if (exportedChart.pixelColor(10, 5) != QColor(210, 210, 210)) {
+        return fail(QStringLiteral("Pattern chart PNG should contain light grid lines."));
+    }
+    if (exportedChart.pixelColor(0, 5) != QColor(120, 120, 120)) {
+        return fail(QStringLiteral("Pattern chart PNG should contain darker 10-stitch grid lines."));
+    }
+    if (exportedChart.pixelColor(20, 5) != QColor(210, 0, 0) ||
+        exportedChart.pixelColor(5, 10) != QColor(210, 0, 0)) {
+        return fail(QStringLiteral("Pattern chart PNG should contain red center lines."));
+    }
+
+    const QColor redFill = QColor(227, 29, 66);
+    bool foundSymbolPixel = false;
+    for (int y = 1; y < 9 && !foundSymbolPixel; ++y) {
+        for (int x = 1; x < 9; ++x) {
+            const QColor pixel = exportedChart.pixelColor(x, y);
+            if (pixel != redFill &&
+                pixel != QColor(210, 210, 210) &&
+                pixel != QColor(120, 120, 120) &&
+                pixel != QColor(210, 0, 0)) {
+                foundSymbolPixel = true;
+                break;
+            }
+        }
+    }
+    if (!foundSymbolPixel) {
+        return fail(QStringLiteral("Pattern chart PNG should contain centered symbol pixels."));
+    }
+
     const PatternModel emptyPattern = PatternModel::fromImage(QImage());
     if (emptyPattern.ok) return fail(QStringLiteral("Null image should not build a pattern model."));
 

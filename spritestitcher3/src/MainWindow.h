@@ -21,6 +21,7 @@ public:
 private slots:
     void openPng();
     void exportCsv();
+    void exportChartPng();
 
 private:
     void buildUi();
@@ -29,11 +30,13 @@ private:
     TransparencyOptions currentTransparencyOptions() const;
     void showPattern(const QString &path, const QImage &image, const PatternModel &model);
     void updateBackgroundColorDisplay(const QImage &image);
+    int currentChartCellSize() const;
     void refreshChartPreview();
     void clearImage(const QString &message);
 
     QPushButton *m_openButton = nullptr;
     QPushButton *m_exportCsvButton = nullptr;
+    QPushButton *m_exportChartPngButton = nullptr;
     QLabel *m_pathLabel = nullptr;
     QLabel *m_sizeLabel = nullptr;
     QLabel *m_colorCountLabel = nullptr;

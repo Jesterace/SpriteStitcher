@@ -68,12 +68,15 @@ void MainWindow::buildUi() {
     m_openButton = new QPushButton(QStringLiteral("Open PNG..."), topBar);
     m_exportCsvButton = new QPushButton(QStringLiteral("Export CSV..."), topBar);
     m_exportCsvButton->setEnabled(false);
+    m_exportChartPngButton = new QPushButton(QStringLiteral("Export Chart PNG..."), topBar);
+    m_exportChartPngButton->setEnabled(false);
     m_pathLabel = new QLabel(QStringLiteral("No image loaded."), topBar);
     m_pathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_pathLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 
     topLayout->addWidget(m_openButton);
     topLayout->addWidget(m_exportCsvButton);
+    topLayout->addWidget(m_exportChartPngButton);
     topLayout->addWidget(m_pathLabel, 1);
     root->addWidget(topBar);
 
@@ -199,6 +202,7 @@ void MainWindow::buildUi() {
 
     connect(m_openButton, &QPushButton::clicked, this, &MainWindow::openPng);
     connect(m_exportCsvButton, &QPushButton::clicked, this, &MainWindow::exportCsv);
+    connect(m_exportChartPngButton, &QPushButton::clicked, this, &MainWindow::exportChartPng);
     connect(m_chartZoomCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] { refreshChartPreview(); });
     connect(m_backgroundTransparentCheckBox, &QCheckBox::toggled, this, [this] { rebuildPattern(); });
     updateBackgroundColorDisplay(QImage());
@@ -249,6 +253,39 @@ void MainWindow::exportCsv() {
     QMessageBox::information(this, QStringLiteral("Export CSV"), QStringLiteral("CSV exported."));
 }
 
+void MainWindow::exportChartPng() {
+    if (!m_patternModel.ok) {
+        QMessageBox::warning(this, QStringLiteral("Export Chart PNG"), QStringLiteral("Open a PNG before exporting a chart."));
+        return;
+    }
+
+    QString defaultPath = QStringLiteral("spritestitcher3_chart.png");
+    if (!m_currentImagePath.isEmpty()) {
+        const QFileInfo info(m_currentImagePath);
+        defaultPath = info.dir().filePath(info.completeBaseName() + QStringLiteral("_spritestitcher3_chart.png"));
+    }
+
+    QString path = QFileDialog::getSaveFileName(
+        this,
+        QStringLiteral("Export Chart PNG"),
+        defaultPath,
+        QStringLiteral("PNG images (*.png)"));
+    if (path.isEmpty()) {
+        return;
+    }
+    if (QFileInfo(path).suffix().isEmpty()) {
+        path += QStringLiteral(".png");
+    }
+
+    QString error;
+    if (!m_patternModel.writeChartPngFile(path, currentChartCellSize(), &error)) {
+        QMessageBox::warning(this, QStringLiteral("Export Chart PNG"), error);
+        return;
+    }
+
+    QMessageBox::information(this, QStringLiteral("Export Chart PNG"), QStringLiteral("Chart PNG exported."));
+}
+
 void MainWindow::loadImage(const QString &path) {
     QImageReader reader(path);
     reader.setAutoTransform(true);
@@ -292,6 +329,7 @@ void MainWindow::showPattern(const QString &path, const QImage &image, const Pat
     m_patternModel = model;
     m_currentImagePath = QFileInfo(path).absoluteFilePath();
     m_exportCsvButton->setEnabled(true);
+    m_exportChartPngButton->setEnabled(true);
 
     m_pathLabel->setText(m_currentImagePath);
     m_sizeLabel->setText(QStringLiteral("Size: %1 x %2 px").arg(model.imageWidth).arg(model.imageHeight));
@@ -378,6 +416,10 @@ void MainWindow::updateBackgroundColorDisplay(const QImage &image) {
     m_backgroundColorSwatch->setPalette(palette);
 }
 
+int MainWindow::currentChartCellSize() const {
+    return m_chartZoomCombo ? m_chartZoomCombo->currentData().toInt() : 12;
+}
+
 void MainWindow::refreshChartPreview() {
     if (!m_chartLabel || !m_chartScrollArea) return;
     if (!m_patternModel.ok || m_patternModel.imageWidth <= 0 || m_patternModel.imageHeight <= 0) {
@@ -388,8 +430,7 @@ void MainWindow::refreshChartPreview() {
         return;
     }
 
-    const int cellSize = m_chartZoomCombo ? m_chartZoomCombo->currentData().toInt() : 12;
-    const QImage chart = m_patternModel.renderChartPreview(cellSize, true);
+    const QImage chart = m_patternModel.renderChartPreview(currentChartCellSize(), true);
     if (chart.isNull()) return;
 
     const QPixmap pixmap = QPixmap::fromImage(chart);
@@ -404,6 +445,7 @@ void MainWindow::clearImage(const QString &message) {
     m_sourceImage = QImage();
     m_currentImagePath.clear();
     m_exportCsvButton->setEnabled(false);
+    m_exportChartPngButton->setEnabled(false);
     m_pathLabel->setText(message);
     m_sizeLabel->setText(QStringLiteral("Size: -"));
     m_colorCountLabel->setText(QStringLiteral("Unique colors: -"));

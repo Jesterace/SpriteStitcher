@@ -3,6 +3,7 @@
 #include <QFile>
 #include <QHash>
 #include <QFont>
+#include <QImageWriter>
 #include <QPainter>
 #include <QPen>
 #include <QPoint>
@@ -201,6 +202,28 @@ QImage PatternModel::renderChartPreview(int cellSize, bool drawCenterLines) cons
 
     painter.end();
     return canvas;
+}
+
+bool PatternModel::writeChartPngFile(const QString &path, int cellSize, QString *errorMessage) const {
+    const QImage chart = renderChartPreview(cellSize, true);
+    if (chart.isNull()) {
+        if (errorMessage) {
+            *errorMessage = ok
+                ? QStringLiteral("Could not render chart PNG.")
+                : error;
+        }
+        return false;
+    }
+
+    QImageWriter writer(path, "PNG");
+    if (!writer.write(chart)) {
+        if (errorMessage) {
+            *errorMessage = writer.errorString();
+        }
+        return false;
+    }
+
+    return true;
 }
 
 QString PatternModel::toCsv() const {
