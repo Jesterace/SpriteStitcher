@@ -151,6 +151,12 @@ void MainWindow::buildUi() {
     auto *chartControls = new QWidget(chartBox);
     auto *chartControlsLayout = new QHBoxLayout(chartControls);
     chartControlsLayout->setContentsMargins(0, 0, 0, 0);
+    chartControlsLayout->addWidget(new QLabel(QStringLiteral("Mode:"), chartControls));
+    m_chartModeCombo = new QComboBox(chartControls);
+    m_chartModeCombo->addItem(QStringLiteral("Color + Symbols"), static_cast<int>(ChartMode::ColorAndSymbols));
+    m_chartModeCombo->addItem(QStringLiteral("Symbols Only"), static_cast<int>(ChartMode::SymbolsOnly));
+    m_chartModeCombo->addItem(QStringLiteral("Colors Only"), static_cast<int>(ChartMode::ColorsOnly));
+    chartControlsLayout->addWidget(m_chartModeCombo);
     chartControlsLayout->addWidget(new QLabel(QStringLiteral("Zoom:"), chartControls));
     m_chartZoomCombo = new QComboBox(chartControls);
     m_chartZoomCombo->addItem(QStringLiteral("1x"), 12);
@@ -218,6 +224,7 @@ void MainWindow::buildUi() {
     connect(m_exportChartPngButton, &QPushButton::clicked, this, &MainWindow::exportChartPng);
     connect(m_exportPdfButton, &QPushButton::clicked, this, &MainWindow::exportPdf);
     connect(m_chartZoomCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] { refreshChartPreview(); });
+    connect(m_chartModeCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] { refreshChartPreview(); });
     connect(m_backgroundTransparentCheckBox, &QCheckBox::toggled, this, [this] { rebuildPattern(); });
     updateBackgroundColorDisplay(QImage());
 }
@@ -292,7 +299,7 @@ void MainWindow::exportChartPng() {
     }
 
     QString error;
-    if (!m_patternModel.writeChartPngFile(path, currentChartCellSize(), &error)) {
+    if (!m_patternModel.writeChartPngFile(path, currentChartCellSize(), &error, currentChartMode())) {
         QMessageBox::warning(this, QStringLiteral("Export Chart PNG"), error);
         return;
     }
@@ -332,7 +339,7 @@ void MainWindow::exportPdf() {
     const QString path = withPdfSuffix(dialog.selectedFiles().first());
 
     QString error;
-    if (!m_patternModel.writePdfFile(path, imageName, currentChartCellSize(), &error)) {
+    if (!m_patternModel.writePdfFile(path, imageName, currentChartCellSize(), &error, currentChartMode())) {
         QMessageBox::warning(
             this,
             QStringLiteral("Export PDF"),
@@ -504,6 +511,13 @@ int MainWindow::currentChartCellSize() const {
     return m_chartZoomCombo ? m_chartZoomCombo->currentData().toInt() : 12;
 }
 
+ChartMode MainWindow::currentChartMode() const {
+    if (!m_chartModeCombo) {
+        return ChartMode::ColorAndSymbols;
+    }
+    return static_cast<ChartMode>(m_chartModeCombo->currentData().toInt());
+}
+
 void MainWindow::refreshChartPreview() {
     if (!m_chartLabel || !m_chartScrollArea) return;
     if (!m_patternModel.ok || m_patternModel.imageWidth <= 0 || m_patternModel.imageHeight <= 0) {
@@ -514,7 +528,7 @@ void MainWindow::refreshChartPreview() {
         return;
     }
 
-    const QImage chart = m_patternModel.renderChartPreview(currentChartCellSize(), true);
+    const QImage chart = m_patternModel.renderChartPreview(currentChartCellSize(), true, currentChartMode());
     if (chart.isNull()) return;
 
     const QPixmap pixmap = QPixmap::fromImage(chart);

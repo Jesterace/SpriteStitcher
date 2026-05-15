@@ -32,6 +32,7 @@ private:
     void showPattern(const QString &path, const QImage &image, const PatternModel &model);
     void updateBackgroundColorDisplay(const QImage &image);
     int currentChartCellSize() const;
+    ChartMode currentChartMode() const;
     void refreshChartPreview();
     void clearImage(const QString &message);
 
@@ -51,6 +52,7 @@ private:
     QLabel *m_chartLabel = nullptr;
     QScrollArea *m_chartScrollArea = nullptr;
     QComboBox *m_chartZoomCombo = nullptr;
+    QComboBox *m_chartModeCombo = nullptr;
     QTableWidget *m_colorTable = nullptr;
     PatternModel m_patternModel;
     QImage m_sourceImage;

@@ -30,6 +30,36 @@ const PatternSpriteColor *findSpriteColor(const PatternModel &model, QRgb rgba) 
     }
     return nullptr;
 }
+
+bool cellContainsInkOutsideColors(const QImage &image, const QRect &cell, const QVector<QColor> &allowedColors) {
+    for (int y = cell.top(); y <= cell.bottom(); ++y) {
+        for (int x = cell.left(); x <= cell.right(); ++x) {
+            const QColor pixel = image.pixelColor(x, y);
+            bool allowed = false;
+            for (const QColor &color : allowedColors) {
+                if (pixel == color) {
+                    allowed = true;
+                    break;
+                }
+            }
+            if (!allowed) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool cellIsSolidColor(const QImage &image, const QRect &cell, const QColor &color) {
+    for (int y = cell.top(); y <= cell.bottom(); ++y) {
+        for (int x = cell.left(); x <= cell.right(); ++x) {
+            if (image.pixelColor(x, y) != color) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
 }
 
 int main(int argc, char *argv[]) {
@@ -311,8 +341,38 @@ int main(int argc, char *argv[]) {
     if (blankChart.pixelColor(50, 5) != QColor(210, 0, 0)) return fail(QStringLiteral("Vertical center line should be red."));
     if (blankChart.pixelColor(5, 10) != QColor(210, 0, 0)) return fail(QStringLiteral("Horizontal center line should be red."));
 
-    const QImage stitchChart = pattern.renderChartPreview(10);
+    const QColor redFill = QColor(227, 29, 66);
+    const QColor symbolOnlyFill = QColor(250, 250, 250);
+    const QVector<QColor> gridAndCenterColors{
+        QColor(210, 210, 210),
+        QColor(120, 120, 120),
+        QColor(210, 0, 0)
+    };
+
+    const QImage stitchChart = pattern.renderChartPreview(10, true, ChartMode::ColorAndSymbols);
     if (stitchChart.pixelColor(2, 2) == QColor(Qt::white)) return fail(QStringLiteral("Stitch cell should not render as blank white."));
+    if (!cellContainsInkOutsideColors(stitchChart, QRect(1, 1, 8, 8), QVector<QColor>{redFill} + gridAndCenterColors)) {
+        return fail(QStringLiteral("Color + Symbols chart should draw centered symbol pixels."));
+    }
+
+    const QImage symbolsOnlyChart = pattern.renderChartPreview(10, true, ChartMode::SymbolsOnly);
+    if (symbolsOnlyChart.pixelColor(1, 1) != symbolOnlyFill) {
+        return fail(QStringLiteral("Symbols Only chart should draw light stitch cells."));
+    }
+    if (symbolsOnlyChart.pixelColor(35, 15) != QColor(Qt::white)) {
+        return fail(QStringLiteral("Symbols Only chart should keep no-stitch cells blank."));
+    }
+    if (!cellContainsInkOutsideColors(symbolsOnlyChart, QRect(1, 1, 8, 8), QVector<QColor>{symbolOnlyFill} + gridAndCenterColors)) {
+        return fail(QStringLiteral("Symbols Only chart should draw centered symbol pixels."));
+    }
+
+    const QImage colorsOnlyChart = pattern.renderChartPreview(10, true, ChartMode::ColorsOnly);
+    if (colorsOnlyChart.pixelColor(2, 2) != redFill) {
+        return fail(QStringLiteral("Colors Only chart should draw colored stitch cells."));
+    }
+    if (!cellIsSolidColor(colorsOnlyChart, QRect(1, 1, 8, 8), redFill)) {
+        return fail(QStringLiteral("Colors Only chart should not draw symbol pixels."));
+    }
 
     const QString chartPngPath = QDir(tempDir.path()).filePath(QStringLiteral("chart.png"));
     QString chartPngError;
@@ -349,7 +409,6 @@ int main(int argc, char *argv[]) {
         return fail(QStringLiteral("Pattern chart PNG should contain red center lines."));
     }
 
-    const QColor redFill = QColor(227, 29, 66);
     bool foundSymbolPixel = false;
     for (int y = 1; y < 9 && !foundSymbolPixel; ++y) {
         for (int x = 1; x < 9; ++x) {
@@ -367,9 +426,22 @@ int main(int argc, char *argv[]) {
         return fail(QStringLiteral("Pattern chart PNG should contain centered symbol pixels."));
     }
 
+    const QString symbolsOnlyPngPath = QDir(tempDir.path()).filePath(QStringLiteral("chart-symbols-only.png"));
+    if (!pattern.writeChartPngFile(symbolsOnlyPngPath, 10, &chartPngError, ChartMode::SymbolsOnly)) {
+        return fail(QStringLiteral("Symbols Only chart PNG write failed: ") + chartPngError);
+    }
+    QImage exportedSymbolsOnlyChart;
+    if (!exportedSymbolsOnlyChart.load(symbolsOnlyPngPath, "PNG")) {
+        return fail(QStringLiteral("Symbols Only chart PNG could not be reloaded."));
+    }
+    if (exportedSymbolsOnlyChart.pixelColor(1, 1) != symbolOnlyFill ||
+        !cellContainsInkOutsideColors(exportedSymbolsOnlyChart, QRect(1, 1, 8, 8), QVector<QColor>{symbolOnlyFill} + gridAndCenterColors)) {
+        return fail(QStringLiteral("Symbols Only chart PNG should use the selected chart mode."));
+    }
+
     const QString pdfPath = QDir(tempDir.path()).filePath(QStringLiteral("pattern.pdf"));
     QString pdfError;
-    if (!pattern.writePdfFile(pdfPath, QStringLiteral("Test Sprite"), 10, &pdfError)) {
+    if (!pattern.writePdfFile(pdfPath, QStringLiteral("Test Sprite"), 10, &pdfError, ChartMode::ColorsOnly)) {
         return fail(QStringLiteral("Pattern PDF write failed: ") + pdfError);
     }
 

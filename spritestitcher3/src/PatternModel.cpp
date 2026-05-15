@@ -225,7 +225,7 @@ QString PatternModel::finishedSizeText(int fabricCount) const {
              formatInches(static_cast<double>(imageHeight) / fabricCount));
 }
 
-QImage PatternModel::renderChartPreview(int cellSize, bool drawCenterLines) const {
+QImage PatternModel::renderChartPreview(int cellSize, bool drawCenterLines, ChartMode chartMode) const {
     if (!ok || imageWidth <= 0 || imageHeight <= 0 || cellSize <= 0) {
         return QImage();
     }
@@ -256,17 +256,22 @@ QImage PatternModel::renderChartPreview(int cellSize, bool drawCenterLines) cons
 
             const PatternSpriteColor &sprite = spriteColors[spriteIndex];
             const int matchedIndex = sprite.matchedColorIndex;
-            const QColor fill = (matchedIndex >= 0 && matchedIndex < matchedColors.size())
+            const bool drawColor = chartMode != ChartMode::SymbolsOnly;
+            const bool drawSymbol = chartMode != ChartMode::ColorsOnly;
+            const QColor matchedFill = (matchedIndex >= 0 && matchedIndex < matchedColors.size())
                 ? matchedColors[matchedIndex].dmc.color
                 : QColor::fromRgba(sprite.rgba);
+            const QColor fill = drawColor ? matchedFill : QColor(250, 250, 250);
             painter.fillRect(rect, fill);
 
-            const int luminance = (fill.red() * 299 + fill.green() * 587 + fill.blue() * 114) / 1000;
-            painter.setPen(luminance < 128 ? Qt::white : Qt::black);
-            const QString symbol = (matchedIndex >= 0 && matchedIndex < matchedColors.size())
-                ? matchedColors[matchedIndex].symbol
-                : QString();
-            painter.drawText(rect, Qt::AlignCenter, symbol);
+            if (drawSymbol) {
+                const int luminance = (fill.red() * 299 + fill.green() * 587 + fill.blue() * 114) / 1000;
+                painter.setPen(luminance < 128 ? Qt::white : Qt::black);
+                const QString symbol = (matchedIndex >= 0 && matchedIndex < matchedColors.size())
+                    ? matchedColors[matchedIndex].symbol
+                    : QString();
+                painter.drawText(rect, Qt::AlignCenter, symbol);
+            }
         }
     }
 
@@ -299,8 +304,8 @@ QImage PatternModel::renderChartPreview(int cellSize, bool drawCenterLines) cons
     return canvas;
 }
 
-bool PatternModel::writeChartPngFile(const QString &path, int cellSize, QString *errorMessage) const {
-    const QImage chart = renderChartPreview(cellSize, true);
+bool PatternModel::writeChartPngFile(const QString &path, int cellSize, QString *errorMessage, ChartMode chartMode) const {
+    const QImage chart = renderChartPreview(cellSize, true, chartMode);
     if (chart.isNull()) {
         if (errorMessage) {
             *errorMessage = ok
@@ -321,8 +326,8 @@ bool PatternModel::writeChartPngFile(const QString &path, int cellSize, QString 
     return true;
 }
 
-bool PatternModel::writePdfFile(const QString &path, const QString &imageName, int chartCellSize, QString *errorMessage) const {
-    const QImage chart = renderChartPreview(chartCellSize, true);
+bool PatternModel::writePdfFile(const QString &path, const QString &imageName, int chartCellSize, QString *errorMessage, ChartMode chartMode) const {
+    const QImage chart = renderChartPreview(chartCellSize, true, chartMode);
     if (chart.isNull()) {
         if (errorMessage) {
             *errorMessage = ok
