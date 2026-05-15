@@ -23,6 +23,13 @@ const ColorEntry *findColor(const QVector<ColorEntry> &colors, QRgb rgba) {
     }
     return nullptr;
 }
+
+const PatternSpriteColor *findSpriteColor(const PatternModel &model, QRgb rgba) {
+    for (const PatternSpriteColor &entry : model.spriteColors) {
+        if (entry.rgba == rgba) return &entry;
+    }
+    return nullptr;
+}
 }
 
 int main(int argc, char *argv[]) {
@@ -170,6 +177,58 @@ int main(int argc, char *argv[]) {
     if (exactWhite.color.number != QStringLiteral("White")) return fail(QStringLiteral("Expected White DMC code to remain text."));
     if (exactWhite.color.name != QStringLiteral("White")) return fail(QStringLiteral("Expected White DMC name to be White."));
     if (exactWhite.distanceSquared != 0) return fail(QStringLiteral("Expected exact White DMC distance to be zero."));
+
+    QImage dmcSortImage(15, 1, QImage::Format_ARGB32);
+    int dmcSortX = 0;
+    for (int i = 0; i < 5; ++i) dmcSortImage.setPixel(dmcSortX++, 0, QColor(71, 129, 165).rgba());   // 825
+    for (int i = 0; i < 4; ++i) dmcSortImage.setPixel(dmcSortX++, 0, QColor(250, 50, 3).rgba());     // 606
+    for (int i = 0; i < 3; ++i) dmcSortImage.setPixel(dmcSortX++, 0, QColor(252, 251, 248).rgba());  // White
+    for (int i = 0; i < 2; ++i) dmcSortImage.setPixel(dmcSortX++, 0, QColor(37, 59, 115).rgba());    // 336
+    dmcSortImage.setPixel(dmcSortX++, 0, QColor(0, 0, 0).rgba());                                    // 310
+
+    const PatternModel dmcSortPattern = PatternModel::fromImage(dmcSortImage);
+    if (!dmcSortPattern.ok) return fail(QStringLiteral("Expected DMC sort pattern to build successfully."));
+    const QStringList expectedDmcCodes{
+        QStringLiteral("310"),
+        QStringLiteral("336"),
+        QStringLiteral("606"),
+        QStringLiteral("825"),
+        QStringLiteral("White")
+    };
+    if (dmcSortPattern.matchedColors.size() != expectedDmcCodes.size()) {
+        return fail(QStringLiteral("DMC sort pattern matched color count was wrong."));
+    }
+    for (int i = 0; i < expectedDmcCodes.size(); ++i) {
+        if (dmcSortPattern.matchedColors[i].dmc.number != expectedDmcCodes[i]) {
+            return fail(QStringLiteral("DMC matched colors were not sorted in natural code order."));
+        }
+        if (dmcSortPattern.matchedColors[i].symbol != QString(QChar(QLatin1Char('A' + i)))) {
+            return fail(QStringLiteral("DMC sorted symbol assignment was wrong."));
+        }
+    }
+    const QStringList dmcSortCsvLines = dmcSortPattern.toCsv().trimmed().split(QLatin1Char('\n'));
+    for (int i = 0; i < expectedDmcCodes.size(); ++i) {
+        const QString expectedFragment = QStringLiteral(",%1,").arg(expectedDmcCodes[i]);
+        if (!dmcSortCsvLines.value(i + 1).contains(expectedFragment)) {
+            return fail(QStringLiteral("DMC CSV rows were not sorted in natural code order."));
+        }
+    }
+    const PatternSpriteColor *sortBlue825 = findSpriteColor(dmcSortPattern, QColor(71, 129, 165).rgba());
+    const PatternSpriteColor *sortWhite = findSpriteColor(dmcSortPattern, QColor(252, 251, 248).rgba());
+    if (!sortBlue825 || sortBlue825->matchedColorIndex != 3 ||
+        dmcSortPattern.matchedColors[sortBlue825->matchedColorIndex].symbol != QStringLiteral("D")) {
+        return fail(QStringLiteral("DMC 825 sprite color should map to sorted symbol D."));
+    }
+    if (!sortWhite || sortWhite->matchedColorIndex != 4 ||
+        dmcSortPattern.matchedColors[sortWhite->matchedColorIndex].symbol != QStringLiteral("E")) {
+        return fail(QStringLiteral("White sprite color should sort after numeric DMC codes and map to symbol E."));
+    }
+    const int firstGridSpriteIndex = dmcSortPattern.stitchGrid.value(0, -1);
+    if (firstGridSpriteIndex < 0 ||
+        dmcSortPattern.spriteColors[firstGridSpriteIndex].matchedColorIndex != 3 ||
+        dmcSortPattern.stitchPixels[0].matchedColorIndex != 3) {
+        return fail(QStringLiteral("Chart stitch indexes should still point at sorted symbols."));
+    }
 
     QImage patternImage(4, 2, QImage::Format_ARGB32);
     patternImage.fill(QColor(0, 255, 0, 0).rgba());

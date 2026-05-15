@@ -48,6 +48,26 @@ void drawElidedText(QPainter &painter, const QRect &rect, const QString &text, i
     const QString elided = painter.fontMetrics().elidedText(text, Qt::ElideRight, padded.width());
     painter.drawText(padded, flags, elided);
 }
+
+bool dmcCodeLess(const QString &left, const QString &right) {
+    bool leftNumeric = false;
+    bool rightNumeric = false;
+    const int leftNumber = left.toInt(&leftNumeric);
+    const int rightNumber = right.toInt(&rightNumeric);
+
+    if (leftNumeric && rightNumeric && leftNumber != rightNumber) {
+        return leftNumber < rightNumber;
+    }
+    if (leftNumeric != rightNumeric) {
+        return leftNumeric;
+    }
+
+    const int insensitive = QString::compare(left, right, Qt::CaseInsensitive);
+    if (insensitive != 0) {
+        return insensitive < 0;
+    }
+    return left < right;
+}
 }
 
 PatternModel PatternModel::fromImage(const QImage &image, const TransparencyOptions &options) {
@@ -139,6 +159,44 @@ PatternModel PatternModel::fromAnalysis(const ImageAnalysisResult &analysis) {
         matched.stitchCount += entry.pixels;
         matched.spriteColorIndexes.push_back(spriteIndex);
         matched.sourceSpriteColorHexes.push_back(spriteColor.hex);
+    }
+
+    QVector<int> sortedMatchedIndexes;
+    sortedMatchedIndexes.reserve(model.matchedColors.size());
+    for (int i = 0; i < model.matchedColors.size(); ++i) {
+        sortedMatchedIndexes.push_back(i);
+    }
+
+    std::stable_sort(sortedMatchedIndexes.begin(), sortedMatchedIndexes.end(), [&](int left, int right) {
+        const PatternMatchedColor &leftMatched = model.matchedColors[left];
+        const PatternMatchedColor &rightMatched = model.matchedColors[right];
+        if (leftMatched.dmc.number != rightMatched.dmc.number) {
+            return dmcCodeLess(leftMatched.dmc.number, rightMatched.dmc.number);
+        }
+        const int nameCompare = QString::compare(leftMatched.dmc.name, rightMatched.dmc.name, Qt::CaseInsensitive);
+        if (nameCompare != 0) {
+            return nameCompare < 0;
+        }
+        return left < right;
+    });
+
+    QVector<int> oldMatchedIndexToNew(model.matchedColors.size(), -1);
+    QVector<PatternMatchedColor> sortedMatchedColors;
+    sortedMatchedColors.reserve(model.matchedColors.size());
+    for (int newIndex = 0; newIndex < sortedMatchedIndexes.size(); ++newIndex) {
+        const int oldIndex = sortedMatchedIndexes[newIndex];
+        PatternMatchedColor matched = model.matchedColors[oldIndex];
+        matched.symbol = symbolForIndex(newIndex);
+        oldMatchedIndexToNew[oldIndex] = newIndex;
+        sortedMatchedColors.push_back(matched);
+    }
+    model.matchedColors = sortedMatchedColors;
+
+    for (PatternSpriteColor &spriteColor : model.spriteColors) {
+        const int oldIndex = spriteColor.matchedColorIndex;
+        if (oldIndex >= 0 && oldIndex < oldMatchedIndexToNew.size()) {
+            spriteColor.matchedColorIndex = oldMatchedIndexToNew[oldIndex];
+        }
     }
 
     return model;

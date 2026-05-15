@@ -26,6 +26,7 @@
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
+#include <algorithm>
 
 namespace {
 QPixmap checkerboardPreview(const QImage &source) {
@@ -414,8 +415,29 @@ void MainWindow::showPattern(const QString &path, const QImage &image, const Pat
     m_colorTable->clearContents();
     m_colorTable->setRowCount(model.spriteColors.size());
 
-    for (int row = 0; row < model.spriteColors.size(); ++row) {
-        const PatternSpriteColor &entry = model.spriteColors[row];
+    QVector<int> spriteRows;
+    spriteRows.reserve(model.spriteColors.size());
+    for (int i = 0; i < model.spriteColors.size(); ++i) {
+        spriteRows.push_back(i);
+    }
+    std::stable_sort(spriteRows.begin(), spriteRows.end(), [&](int left, int right) {
+        const PatternSpriteColor &leftColor = model.spriteColors[left];
+        const PatternSpriteColor &rightColor = model.spriteColors[right];
+        const int fallbackMatchedIndex = static_cast<int>(model.matchedColors.size());
+        const int leftMatchedIndex = leftColor.matchedColorIndex >= 0
+            ? leftColor.matchedColorIndex
+            : fallbackMatchedIndex;
+        const int rightMatchedIndex = rightColor.matchedColorIndex >= 0
+            ? rightColor.matchedColorIndex
+            : fallbackMatchedIndex;
+        if (leftMatchedIndex != rightMatchedIndex) {
+            return leftMatchedIndex < rightMatchedIndex;
+        }
+        return leftColor.hex < rightColor.hex;
+    });
+
+    for (int row = 0; row < spriteRows.size(); ++row) {
+        const PatternSpriteColor &entry = model.spriteColors[spriteRows[row]];
         const QColor color = QColor::fromRgba(entry.rgba);
         const DmcMatch &match = entry.dmcMatch;
         const QString symbol = (entry.matchedColorIndex >= 0 && entry.matchedColorIndex < model.matchedColors.size())
