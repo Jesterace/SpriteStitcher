@@ -2,8 +2,12 @@
 
 #include <QFile>
 #include <QHash>
+#include <QFont>
+#include <QPainter>
+#include <QPen>
 #include <QPoint>
 #include <QTextStream>
+#include <algorithm>
 
 namespace {
 QString csvEscape(const QString &value) {
@@ -31,6 +35,7 @@ PatternModel PatternModel::fromImage(const QImage &image) {
     }
 
     const QImage argbImage = image.convertToFormat(QImage::Format_ARGB32);
+    model.stitchGrid.fill(-1, model.imageWidth * model.imageHeight);
     model.stitchPixels.reserve(model.opaqueStitchPixels);
     model.noStitchPixels.reserve(model.transparentPixels);
 
@@ -47,6 +52,9 @@ PatternModel PatternModel::fromImage(const QImage &image) {
             const int matchedColorIndex = spriteColorIndex >= 0
                 ? model.spriteColors[spriteColorIndex].matchedColorIndex
                 : -1;
+            if (spriteColorIndex >= 0 && y * model.imageWidth + x < model.stitchGrid.size()) {
+                model.stitchGrid[y * model.imageWidth + x] = spriteColorIndex;
+            }
             model.stitchPixels.push_back(PatternPixel{x, y, spriteColorIndex, matchedColorIndex});
         }
     }
@@ -113,6 +121,80 @@ int PatternModel::uniqueSpriteColorCount() const {
 
 int PatternModel::matchedColorCount() const {
     return matchedColors.size();
+}
+
+QImage PatternModel::renderChartPreview(int cellSize, bool drawCenterLines) const {
+    if (!ok || imageWidth <= 0 || imageHeight <= 0 || cellSize <= 0) {
+        return QImage();
+    }
+
+    const QSize outputSize(imageWidth * cellSize, imageHeight * cellSize);
+    QImage canvas(outputSize, QImage::Format_ARGB32);
+    canvas.fill(Qt::white);
+
+    QPainter painter(&canvas);
+    painter.setRenderHint(QPainter::Antialiasing, false);
+    painter.setRenderHint(QPainter::TextAntialiasing, true);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
+
+    QFont font = painter.font();
+    font.setBold(true);
+    font.setPixelSize(std::max(6, static_cast<int>(cellSize * 0.55)));
+    painter.setFont(font);
+
+    for (int y = 0; y < imageHeight; ++y) {
+        for (int x = 0; x < imageWidth; ++x) {
+            const int index = y * imageWidth + x;
+            const int spriteIndex = index < stitchGrid.size() ? stitchGrid[index] : -1;
+            const QRect rect(x * cellSize, y * cellSize, cellSize, cellSize);
+            if (spriteIndex < 0 || spriteIndex >= spriteColors.size()) {
+                painter.fillRect(rect, Qt::white);
+                continue;
+            }
+
+            const PatternSpriteColor &sprite = spriteColors[spriteIndex];
+            const int matchedIndex = sprite.matchedColorIndex;
+            const QColor fill = (matchedIndex >= 0 && matchedIndex < matchedColors.size())
+                ? matchedColors[matchedIndex].dmc.color
+                : QColor::fromRgba(sprite.rgba);
+            painter.fillRect(rect, fill);
+
+            const int luminance = (fill.red() * 299 + fill.green() * 587 + fill.blue() * 114) / 1000;
+            painter.setPen(luminance < 128 ? Qt::white : Qt::black);
+            const QString symbol = (matchedIndex >= 0 && matchedIndex < matchedColors.size())
+                ? matchedColors[matchedIndex].symbol
+                : QString();
+            painter.drawText(rect, Qt::AlignCenter, symbol);
+        }
+    }
+
+    for (int x = 0; x <= imageWidth; ++x) {
+        QPen pen((x % 10 == 0) ? QColor(120, 120, 120) : QColor(210, 210, 210));
+        pen.setWidth((x % 10 == 0) ? 1 : 1);
+        painter.setPen(pen);
+        const int px = x * cellSize;
+        painter.drawLine(px, 0, px, outputSize.height());
+    }
+    for (int y = 0; y <= imageHeight; ++y) {
+        QPen pen((y % 10 == 0) ? QColor(120, 120, 120) : QColor(210, 210, 210));
+        pen.setWidth((y % 10 == 0) ? 1 : 1);
+        painter.setPen(pen);
+        const int py = y * cellSize;
+        painter.drawLine(0, py, outputSize.width(), py);
+    }
+
+    if (drawCenterLines) {
+        QPen centerPen(QColor(210, 0, 0));
+        centerPen.setWidth(2);
+        painter.setPen(centerPen);
+        const int centerX = (imageWidth / 2) * cellSize;
+        const int centerY = (imageHeight / 2) * cellSize;
+        painter.drawLine(centerX, 0, centerX, outputSize.height());
+        painter.drawLine(0, centerY, outputSize.width(), centerY);
+    }
+
+    painter.end();
+    return canvas;
 }
 
 QString PatternModel::toCsv() const {

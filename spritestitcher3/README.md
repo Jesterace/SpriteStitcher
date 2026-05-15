@@ -14,6 +14,7 @@ This is the first experimental SpriteStitcher 3 prototype. It is intentionally s
 - Display transparent pixels over a checkerboard preview background.
 - Build an internal pattern model with symbols and matched DMC stitch counts.
 - Export a CSV palette foundation with symbol, source sprite colors, source color count, DMC code, DMC name, and stitch count.
+- Preview a stitched chart on screen with symbols, grid lines, and center lines.
 
 Not included in this milestone: PDF export, Pattern Keeper export, batch mode, website preview PNG export, or palette remapping.
 

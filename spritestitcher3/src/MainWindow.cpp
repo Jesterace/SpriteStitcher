@@ -3,6 +3,7 @@
 #include <QAbstractItemView>
 #include <QBrush>
 #include <QColor>
+#include <QComboBox>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFrame>
@@ -18,6 +19,7 @@
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QSplitter>
+#include <QFormLayout>
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
@@ -112,6 +114,36 @@ void MainWindow::buildUi() {
     auto *colorsBox = new QGroupBox(QStringLiteral("Unique Colors"), detailsPanel);
     auto *colorsLayout = new QVBoxLayout(colorsBox);
 
+    auto *chartBox = new QGroupBox(QStringLiteral("Chart Preview"), detailsPanel);
+    auto *chartLayout = new QVBoxLayout(chartBox);
+    auto *chartControls = new QWidget(chartBox);
+    auto *chartControlsLayout = new QHBoxLayout(chartControls);
+    chartControlsLayout->setContentsMargins(0, 0, 0, 0);
+    chartControlsLayout->addWidget(new QLabel(QStringLiteral("Zoom:"), chartControls));
+    m_chartZoomCombo = new QComboBox(chartControls);
+    m_chartZoomCombo->addItem(QStringLiteral("1x"), 12);
+    m_chartZoomCombo->addItem(QStringLiteral("2x"), 18);
+    m_chartZoomCombo->addItem(QStringLiteral("3x"), 24);
+    m_chartZoomCombo->addItem(QStringLiteral("4x"), 32);
+    chartControlsLayout->addWidget(m_chartZoomCombo);
+    chartControlsLayout->addStretch(1);
+    chartLayout->addWidget(chartControls);
+
+    m_chartLabel = new QLabel(QStringLiteral("Open a sprite to preview the chart."), chartBox);
+    m_chartLabel->setAlignment(Qt::AlignCenter);
+    m_chartLabel->setMinimumSize(360, 260);
+    m_chartLabel->setFrameShape(QFrame::StyledPanel);
+    m_chartLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+
+    m_chartScrollArea = new QScrollArea(chartBox);
+    m_chartScrollArea->setWidget(m_chartLabel);
+    m_chartScrollArea->setWidgetResizable(false);
+    m_chartScrollArea->setAlignment(Qt::AlignCenter);
+    m_chartScrollArea->setFrameShape(QFrame::NoFrame);
+    m_chartScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_chartScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    chartLayout->addWidget(m_chartScrollArea, 1);
+
     m_colorTable = new QTableWidget(0, 8, colorsBox);
     m_colorTable->setHorizontalHeaderLabels({
         QStringLiteral("Symbol"),
@@ -137,6 +169,7 @@ void MainWindow::buildUi() {
     m_colorTable->setAlternatingRowColors(true);
 
     colorsLayout->addWidget(m_colorTable);
+    detailsLayout->addWidget(chartBox, 1);
     detailsLayout->addWidget(colorsBox, 1);
 
     splitter->addWidget(m_imageScrollArea);
@@ -150,6 +183,7 @@ void MainWindow::buildUi() {
 
     connect(m_openButton, &QPushButton::clicked, this, &MainWindow::openPng);
     connect(m_exportCsvButton, &QPushButton::clicked, this, &MainWindow::exportCsv);
+    connect(m_chartZoomCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] { refreshChartPreview(); });
 }
 
 void MainWindow::openPng() {
@@ -235,6 +269,8 @@ void MainWindow::showPattern(const QString &path, const QImage &image, const Pat
     m_imageLabel->setMinimumSize(pixmap.size());
     m_imageLabel->resize(pixmap.size());
 
+    refreshChartPreview();
+
     m_colorTable->setSortingEnabled(false);
     m_colorTable->setUpdatesEnabled(false);
     m_colorTable->clearContents();
@@ -280,6 +316,27 @@ void MainWindow::showPattern(const QString &path, const QImage &image, const Pat
     m_colorTable->setSortingEnabled(true);
 }
 
+void MainWindow::refreshChartPreview() {
+    if (!m_chartLabel || !m_chartScrollArea) return;
+    if (!m_patternModel.ok || m_patternModel.imageWidth <= 0 || m_patternModel.imageHeight <= 0) {
+        m_chartLabel->setPixmap(QPixmap());
+        m_chartLabel->setText(QStringLiteral("Open a sprite to preview the chart."));
+        m_chartLabel->setMinimumSize(360, 260);
+        m_chartLabel->resize(360, 260);
+        return;
+    }
+
+    const int cellSize = m_chartZoomCombo ? m_chartZoomCombo->currentData().toInt() : 12;
+    const QImage chart = m_patternModel.renderChartPreview(cellSize, true);
+    if (chart.isNull()) return;
+
+    const QPixmap pixmap = QPixmap::fromImage(chart);
+    m_chartLabel->setPixmap(pixmap);
+    m_chartLabel->setText(QString());
+    m_chartLabel->setMinimumSize(pixmap.size());
+    m_chartLabel->resize(pixmap.size());
+}
+
 void MainWindow::clearImage(const QString &message) {
     m_patternModel = PatternModel();
     m_currentImagePath.clear();
@@ -294,4 +351,5 @@ void MainWindow::clearImage(const QString &message) {
     m_imageLabel->setText(message);
     m_imageLabel->setMinimumSize(360, 260);
     m_imageLabel->resize(360, 260);
+    refreshChartPreview();
 }

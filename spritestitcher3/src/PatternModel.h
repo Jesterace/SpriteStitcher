@@ -44,6 +44,7 @@ public:
     int transparentPixels = 0;
     QVector<PatternPixel> stitchPixels;
     QVector<QPoint> noStitchPixels;
+    QVector<int> stitchGrid;
     QVector<PatternSpriteColor> spriteColors;
     QVector<PatternMatchedColor> matchedColors;
 
@@ -52,6 +53,7 @@ public:
 
     int uniqueSpriteColorCount() const;
     int matchedColorCount() const;
+    QImage renderChartPreview(int cellSize = 16, bool drawCenterLines = true) const;
     QString toCsv() const;
     bool writeCsvFile(const QString &path, QString *errorMessage = nullptr) const;
 

@@ -3,6 +3,7 @@
 #include "DmcMatcher.h"
 #include "PatternModel.h"
 
+#include <QGuiApplication>
 #include <QColor>
 #include <QDebug>
 #include <QDir>
@@ -24,7 +25,10 @@ const ColorEntry *findColor(const QVector<ColorEntry> &colors, QRgb rgba) {
 }
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+    qputenv("QT_QPA_PLATFORM", "offscreen");
+    QGuiApplication app(argc, argv);
+
     QImage image(3, 2, QImage::Format_ARGB32);
     image.fill(QColor(255, 0, 0).rgba());
     image.setPixel(1, 0, QColor(0, 255, 0).rgba());
@@ -152,6 +156,20 @@ int main() {
     if (!whiteCsv.contains(QStringLiteral(",White,White,1\n"))) {
         return fail(QStringLiteral("White DMC code should remain textual in CSV export."));
     }
+
+    QImage chartSource(11, 3, QImage::Format_ARGB32);
+    chartSource.fill(QColor(0, 0, 0, 0).rgba());
+    const PatternModel chartModel = PatternModel::fromImage(chartSource);
+    if (!chartModel.ok) return fail(QStringLiteral("Expected chart model to build successfully."));
+    const QImage blankChart = chartModel.renderChartPreview(10);
+    if (blankChart.size() != QSize(110, 30)) return fail(QStringLiteral("Chart preview dimensions were wrong."));
+    if (blankChart.pixelColor(15, 5) != QColor(Qt::white)) return fail(QStringLiteral("Blank chart background should be white."));
+    if (blankChart.pixelColor(100, 5) != QColor(120, 120, 120)) return fail(QStringLiteral("Every 10th vertical grid line should be darker."));
+    if (blankChart.pixelColor(50, 5) != QColor(210, 0, 0)) return fail(QStringLiteral("Vertical center line should be red."));
+    if (blankChart.pixelColor(5, 10) != QColor(210, 0, 0)) return fail(QStringLiteral("Horizontal center line should be red."));
+
+    const QImage stitchChart = pattern.renderChartPreview(10);
+    if (stitchChart.pixelColor(2, 2) == QColor(Qt::white)) return fail(QStringLiteral("Stitch cell should not render as blank white."));
 
     const PatternModel emptyPattern = PatternModel::fromImage(QImage());
     if (emptyPattern.ok) return fail(QStringLiteral("Null image should not build a pattern model."));
