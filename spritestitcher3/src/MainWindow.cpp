@@ -1,5 +1,7 @@
 #include "MainWindow.h"
 
+#include "DmcMatcher.h"
+
 #include <QAbstractItemView>
 #include <QBrush>
 #include <QColor>
@@ -109,8 +111,16 @@ void MainWindow::buildUi() {
     auto *colorsBox = new QGroupBox(QStringLiteral("Unique Colors"), detailsPanel);
     auto *colorsLayout = new QVBoxLayout(colorsBox);
 
-    m_colorTable = new QTableWidget(0, 3, colorsBox);
-    m_colorTable->setHorizontalHeaderLabels({QStringLiteral("Swatch"), QStringLiteral("Hex"), QStringLiteral("Pixels")});
+    m_colorTable = new QTableWidget(0, 7, colorsBox);
+    m_colorTable->setHorizontalHeaderLabels({
+        QStringLiteral("Sprite"),
+        QStringLiteral("Sprite RGBA"),
+        QStringLiteral("Pixels"),
+        QStringLiteral("DMC"),
+        QStringLiteral("DMC Name"),
+        QStringLiteral("DMC Swatch"),
+        QStringLiteral("Distance^2")
+    });
     m_colorTable->verticalHeader()->setVisible(false);
     m_colorTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_colorTable->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -118,6 +128,9 @@ void MainWindow::buildUi() {
     m_colorTable->horizontalHeader()->setStretchLastSection(true);
     m_colorTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_colorTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    m_colorTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    m_colorTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    m_colorTable->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
     m_colorTable->setAlternatingRowColors(true);
 
     colorsLayout->addWidget(m_colorTable);
@@ -187,6 +200,7 @@ void MainWindow::showAnalysis(const QString &path, const QImage &image, const Im
     for (int row = 0; row < analysis.colors.size(); ++row) {
         const ColorEntry &entry = analysis.colors[row];
         const QColor color = QColor::fromRgba(entry.rgba);
+        const DmcMatch match = DmcMatcher::nearest(entry.rgba);
 
         auto *swatch = new QTableWidgetItem;
         swatch->setBackground(QBrush(color));
@@ -195,10 +209,22 @@ void MainWindow::showAnalysis(const QString &path, const QImage &image, const Im
         auto *hex = new QTableWidgetItem(ImageAnalysis::rgbaToHex(entry.rgba));
         auto *pixels = new QTableWidgetItem;
         pixels->setData(Qt::DisplayRole, entry.pixels);
+        auto *dmcNumber = new QTableWidgetItem(match.ok ? match.color.number : QString());
+        auto *dmcName = new QTableWidgetItem(match.ok ? match.color.name : QString());
+        auto *dmcSwatch = new QTableWidgetItem;
+        if (match.ok) {
+            dmcSwatch->setBackground(QBrush(match.color.color));
+        }
+        auto *distance = new QTableWidgetItem;
+        distance->setData(Qt::DisplayRole, match.ok ? match.distanceSquared : 0);
 
         m_colorTable->setItem(row, 0, swatch);
         m_colorTable->setItem(row, 1, hex);
         m_colorTable->setItem(row, 2, pixels);
+        m_colorTable->setItem(row, 3, dmcNumber);
+        m_colorTable->setItem(row, 4, dmcName);
+        m_colorTable->setItem(row, 5, dmcSwatch);
+        m_colorTable->setItem(row, 6, distance);
     }
 
     m_colorTable->setUpdatesEnabled(true);

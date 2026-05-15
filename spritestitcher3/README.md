@@ -9,10 +9,11 @@ This is the first experimental SpriteStitcher 3 prototype. It is intentionally s
 - Show image width and height.
 - Count exact unique stitch colors.
 - Treat pixels with `alpha == 0` as transparent/background pixels.
-- Show each unique stitch color as a hex value in a simple table.
+- Match each unique stitch color to the nearest built-in DMC floss color.
+- Show each unique stitch color, pixel count, DMC number, DMC name, DMC swatch, and squared RGB match distance in a simple table.
 - Display transparent pixels over a checkerboard preview background.
 
-Not included in this milestone: PDF export, DMC matching, Pattern Keeper export, CSV export, batch mode, website preview PNG export, or palette remapping.
+Not included in this milestone: PDF export, Pattern Keeper export, CSV export, batch mode, website preview PNG export, or palette remapping.
 
 ## Dependencies
 

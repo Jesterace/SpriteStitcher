@@ -1,5 +1,7 @@
 #include "ImageAnalysis.h"
 
+#include "DmcMatcher.h"
+
 #include <QColor>
 #include <QDebug>
 #include <QDir>
@@ -64,6 +66,23 @@ int main() {
     if (fileResult.transparentPixels != 1) return fail(QStringLiteral("PNG file transparent pixel count was wrong."));
     const ColorEntry *fileGreen = findColor(fileResult.colors, QColor(0, 255, 0).rgba());
     if (!fileGreen || fileGreen->pixels != 1) return fail(QStringLiteral("PNG file opaque green pixel count was wrong."));
+
+    const DmcMatch exactRed = DmcMatcher::nearest(QColor(227, 29, 66).rgba());
+    if (!exactRed.ok) return fail(QStringLiteral("Expected exact DMC match to succeed."));
+    if (exactRed.color.number != QStringLiteral("666")) return fail(QStringLiteral("Expected bright red to match DMC 666."));
+    if (exactRed.color.name != QStringLiteral("Bright Red")) return fail(QStringLiteral("Expected DMC 666 name to be Bright Red."));
+    if (exactRed.distanceSquared != 0) return fail(QStringLiteral("Expected exact DMC red distance to be zero."));
+
+    const DmcMatch exactGreen = DmcMatcher::nearest(QColor(71, 167, 47).rgba());
+    if (!exactGreen.ok || exactGreen.color.number != QStringLiteral("702") || exactGreen.distanceSquared != 0) {
+        return fail(QStringLiteral("Expected exact DMC green to match DMC 702 with zero distance."));
+    }
+
+    const DmcMatch nearBlack = DmcMatcher::nearest(QColor(3, 4, 0).rgba());
+    if (!nearBlack.ok || nearBlack.color.number != QStringLiteral("310")) {
+        return fail(QStringLiteral("Expected near-black color to match DMC 310."));
+    }
+    if (nearBlack.distanceSquared != 25) return fail(QStringLiteral("Expected near-black distance to be 25."));
 
     const ImageAnalysisResult empty = ImageAnalysis::analyze(QImage());
     if (empty.ok) return fail(QStringLiteral("Null image should not analyze successfully."));

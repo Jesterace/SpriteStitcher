@@ -9,6 +9,8 @@ set(CMAKE_AUTOMOC ON)
 find_package(Qt6 REQUIRED COMPONENTS Widgets Gui Core)
 
 add_library(SpriteStitcher3Core STATIC
+    src/DmcMatcher.cpp
+    src/DmcMatcher.h
     src/ImageAnalysis.cpp
     src/ImageAnalysis.h
 )
