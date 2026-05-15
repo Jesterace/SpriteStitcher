@@ -60,6 +60,20 @@ bool cellIsSolidColor(const QImage &image, const QRect &cell, const QColor &colo
     }
     return true;
 }
+
+bool cellContainsHighContrastSymbolPixel(const QImage &image, const QRect &cell) {
+    for (int y = cell.top(); y <= cell.bottom(); ++y) {
+        for (int x = cell.left(); x <= cell.right(); ++x) {
+            const QColor pixel = image.pixelColor(x, y);
+            const bool light = pixel.red() >= 245 && pixel.green() >= 245 && pixel.blue() >= 245;
+            const bool dark = pixel.red() <= 40 && pixel.green() <= 40 && pixel.blue() <= 40;
+            if (light || dark) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
 }
 
 int main(int argc, char *argv[]) {
@@ -354,6 +368,9 @@ int main(int argc, char *argv[]) {
     if (!cellContainsInkOutsideColors(stitchChart, QRect(1, 1, 8, 8), QVector<QColor>{redFill} + gridAndCenterColors)) {
         return fail(QStringLiteral("Color + Symbols chart should draw centered symbol pixels."));
     }
+    if (!cellContainsHighContrastSymbolPixel(stitchChart, QRect(1, 1, 8, 8))) {
+        return fail(QStringLiteral("Color + Symbols chart should draw readable high-contrast symbol pixels over colored cells."));
+    }
 
     const QImage symbolsOnlyChart = pattern.renderChartPreview(10, true, ChartMode::SymbolsOnly);
     if (symbolsOnlyChart.pixelColor(1, 1) != symbolOnlyFill) {
@@ -424,6 +441,9 @@ int main(int argc, char *argv[]) {
     }
     if (!foundSymbolPixel) {
         return fail(QStringLiteral("Pattern chart PNG should contain centered symbol pixels."));
+    }
+    if (!cellContainsHighContrastSymbolPixel(exportedChart, QRect(1, 1, 8, 8))) {
+        return fail(QStringLiteral("Pattern chart PNG should contain readable Color + Symbols text over colored cells."));
     }
 
     const QString symbolsOnlyPngPath = QDir(tempDir.path()).filePath(QStringLiteral("chart-symbols-only.png"));

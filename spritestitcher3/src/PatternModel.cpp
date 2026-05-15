@@ -7,6 +7,7 @@
 #include <QPageLayout>
 #include <QPageSize>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPen>
 #include <QPdfWriter>
 #include <QPoint>
@@ -47,6 +48,34 @@ void drawElidedText(QPainter &painter, const QRect &rect, const QString &text, i
     QRect padded = rect.adjusted(padding, 0, -padding, 0);
     const QString elided = painter.fontMetrics().elidedText(text, Qt::ElideRight, padded.width());
     painter.drawText(padded, flags, elided);
+}
+
+void drawCenteredSymbol(QPainter &painter, const QRect &rect, const QString &symbol, const QColor &fill, ChartMode chartMode) {
+    if (symbol.isEmpty()) {
+        return;
+    }
+
+    const int luminance = (fill.red() * 299 + fill.green() * 587 + fill.blue() * 114) / 1000;
+    const QColor textColor = luminance < 128 ? Qt::white : Qt::black;
+    const QColor outlineColor = textColor == QColor(Qt::white) ? QColor(20, 20, 20) : QColor(Qt::white);
+
+    QFontMetrics metrics(painter.font());
+    const QRect textBounds = metrics.boundingRect(symbol);
+    const QPoint textPos(
+        rect.left() + (rect.width() - textBounds.width()) / 2 - textBounds.left(),
+        rect.top() + (rect.height() - textBounds.height()) / 2 - textBounds.top());
+
+    QPainterPath path;
+    path.addText(textPos, painter.font(), symbol);
+
+    if (chartMode == ChartMode::ColorAndSymbols) {
+        QPen outlinePen(outlineColor);
+        outlinePen.setWidthF(std::max(1.0, rect.width() * 0.08));
+        outlinePen.setJoinStyle(Qt::RoundJoin);
+        painter.strokePath(path, outlinePen);
+    }
+
+    painter.fillPath(path, textColor);
 }
 
 bool dmcCodeLess(const QString &left, const QString &right) {
@@ -264,13 +293,11 @@ QImage PatternModel::renderChartPreview(int cellSize, bool drawCenterLines, Char
             const QColor fill = drawColor ? matchedFill : QColor(250, 250, 250);
             painter.fillRect(rect, fill);
 
+            const QString symbol = (matchedIndex >= 0 && matchedIndex < matchedColors.size())
+                ? matchedColors[matchedIndex].symbol
+                : QString();
             if (drawSymbol) {
-                const int luminance = (fill.red() * 299 + fill.green() * 587 + fill.blue() * 114) / 1000;
-                painter.setPen(luminance < 128 ? Qt::white : Qt::black);
-                const QString symbol = (matchedIndex >= 0 && matchedIndex < matchedColors.size())
-                    ? matchedColors[matchedIndex].symbol
-                    : QString();
-                painter.drawText(rect, Qt::AlignCenter, symbol);
+                drawCenteredSymbol(painter, rect, symbol, fill, chartMode);
             }
         }
     }
