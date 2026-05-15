@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ImageAnalysis.h"
+#include "PatternModel.h"
 
 #include <QImage>
 #include <QMainWindow>
@@ -18,14 +18,16 @@ public:
 
 private slots:
     void openPng();
+    void exportCsv();
 
 private:
     void buildUi();
     void loadImage(const QString &path);
-    void showAnalysis(const QString &path, const QImage &image, const ImageAnalysisResult &analysis);
+    void showPattern(const QString &path, const QImage &image, const PatternModel &model);
     void clearImage(const QString &message);
 
     QPushButton *m_openButton = nullptr;
+    QPushButton *m_exportCsvButton = nullptr;
     QLabel *m_pathLabel = nullptr;
     QLabel *m_sizeLabel = nullptr;
     QLabel *m_colorCountLabel = nullptr;
@@ -33,4 +35,6 @@ private:
     QLabel *m_imageLabel = nullptr;
     QScrollArea *m_imageScrollArea = nullptr;
     QTableWidget *m_colorTable = nullptr;
+    PatternModel m_patternModel;
+    QString m_currentImagePath;
 };

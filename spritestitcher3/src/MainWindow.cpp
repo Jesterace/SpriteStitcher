@@ -1,7 +1,5 @@
 #include "MainWindow.h"
 
-#include "DmcMatcher.h"
-
 #include <QAbstractItemView>
 #include <QBrush>
 #include <QColor>
@@ -65,11 +63,14 @@ void MainWindow::buildUi() {
     topLayout->setContentsMargins(0, 0, 0, 0);
 
     m_openButton = new QPushButton(QStringLiteral("Open PNG..."), topBar);
+    m_exportCsvButton = new QPushButton(QStringLiteral("Export CSV..."), topBar);
+    m_exportCsvButton->setEnabled(false);
     m_pathLabel = new QLabel(QStringLiteral("No image loaded."), topBar);
     m_pathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_pathLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 
     topLayout->addWidget(m_openButton);
+    topLayout->addWidget(m_exportCsvButton);
     topLayout->addWidget(m_pathLabel, 1);
     root->addWidget(topBar);
 
@@ -111,12 +112,13 @@ void MainWindow::buildUi() {
     auto *colorsBox = new QGroupBox(QStringLiteral("Unique Colors"), detailsPanel);
     auto *colorsLayout = new QVBoxLayout(colorsBox);
 
-    m_colorTable = new QTableWidget(0, 7, colorsBox);
+    m_colorTable = new QTableWidget(0, 8, colorsBox);
     m_colorTable->setHorizontalHeaderLabels({
+        QStringLiteral("Symbol"),
         QStringLiteral("Sprite"),
         QStringLiteral("Sprite RGBA"),
         QStringLiteral("Pixels"),
-        QStringLiteral("DMC"),
+        QStringLiteral("DMC Code"),
         QStringLiteral("DMC Name"),
         QStringLiteral("DMC Swatch"),
         QStringLiteral("Distance^2")
@@ -130,7 +132,8 @@ void MainWindow::buildUi() {
     m_colorTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     m_colorTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     m_colorTable->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-    m_colorTable->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
+    m_colorTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+    m_colorTable->horizontalHeader()->setSectionResizeMode(6, QHeaderView::ResizeToContents);
     m_colorTable->setAlternatingRowColors(true);
 
     colorsLayout->addWidget(m_colorTable);
@@ -146,6 +149,7 @@ void MainWindow::buildUi() {
     resize(980, 640);
 
     connect(m_openButton, &QPushButton::clicked, this, &MainWindow::openPng);
+    connect(m_exportCsvButton, &QPushButton::clicked, this, &MainWindow::exportCsv);
 }
 
 void MainWindow::openPng() {
@@ -160,6 +164,39 @@ void MainWindow::openPng() {
     }
 }
 
+void MainWindow::exportCsv() {
+    if (!m_patternModel.ok) {
+        QMessageBox::warning(this, QStringLiteral("Export CSV"), QStringLiteral("Open a PNG before exporting CSV."));
+        return;
+    }
+
+    QString defaultPath = QStringLiteral("spritestitcher3_palette.csv");
+    if (!m_currentImagePath.isEmpty()) {
+        const QFileInfo info(m_currentImagePath);
+        defaultPath = info.dir().filePath(info.completeBaseName() + QStringLiteral("_spritestitcher3.csv"));
+    }
+
+    QString path = QFileDialog::getSaveFileName(
+        this,
+        QStringLiteral("Export CSV"),
+        defaultPath,
+        QStringLiteral("CSV files (*.csv)"));
+    if (path.isEmpty()) {
+        return;
+    }
+    if (QFileInfo(path).suffix().isEmpty()) {
+        path += QStringLiteral(".csv");
+    }
+
+    QString error;
+    if (!m_patternModel.writeCsvFile(path, &error)) {
+        QMessageBox::warning(this, QStringLiteral("Export CSV"), error);
+        return;
+    }
+
+    QMessageBox::information(this, QStringLiteral("Export CSV"), QStringLiteral("CSV exported."));
+}
+
 void MainWindow::loadImage(const QString &path) {
     QImageReader reader(path);
     reader.setAutoTransform(true);
@@ -170,21 +207,27 @@ void MainWindow::loadImage(const QString &path) {
         return;
     }
 
-    const ImageAnalysisResult analysis = ImageAnalysis::analyze(image);
-    if (!analysis.ok) {
-        clearImage(analysis.error);
-        QMessageBox::warning(this, QStringLiteral("Open PNG"), analysis.error);
+    const PatternModel model = PatternModel::fromImage(image);
+    if (!model.ok) {
+        clearImage(model.error);
+        QMessageBox::warning(this, QStringLiteral("Open PNG"), model.error);
         return;
     }
 
-    showAnalysis(path, image, analysis);
+    showPattern(path, image, model);
 }
 
-void MainWindow::showAnalysis(const QString &path, const QImage &image, const ImageAnalysisResult &analysis) {
-    m_pathLabel->setText(QFileInfo(path).absoluteFilePath());
-    m_sizeLabel->setText(QStringLiteral("Size: %1 x %2 px").arg(analysis.width).arg(analysis.height));
-    m_colorCountLabel->setText(QStringLiteral("Unique stitch colors: %1").arg(analysis.uniqueColorCount()));
-    m_transparentCountLabel->setText(QStringLiteral("Transparent/background pixels: %1").arg(analysis.transparentPixels));
+void MainWindow::showPattern(const QString &path, const QImage &image, const PatternModel &model) {
+    m_patternModel = model;
+    m_currentImagePath = QFileInfo(path).absoluteFilePath();
+    m_exportCsvButton->setEnabled(true);
+
+    m_pathLabel->setText(m_currentImagePath);
+    m_sizeLabel->setText(QStringLiteral("Size: %1 x %2 px").arg(model.imageWidth).arg(model.imageHeight));
+    m_colorCountLabel->setText(QStringLiteral("Unique stitch colors: %1, matched DMC colors: %2")
+                                   .arg(model.uniqueSpriteColorCount())
+                                   .arg(model.matchedColorCount()));
+    m_transparentCountLabel->setText(QStringLiteral("Transparent/background pixels: %1").arg(model.transparentPixels));
 
     const QPixmap pixmap = checkerboardPreview(image);
     m_imageLabel->setPixmap(pixmap);
@@ -195,18 +238,22 @@ void MainWindow::showAnalysis(const QString &path, const QImage &image, const Im
     m_colorTable->setSortingEnabled(false);
     m_colorTable->setUpdatesEnabled(false);
     m_colorTable->clearContents();
-    m_colorTable->setRowCount(analysis.colors.size());
+    m_colorTable->setRowCount(model.spriteColors.size());
 
-    for (int row = 0; row < analysis.colors.size(); ++row) {
-        const ColorEntry &entry = analysis.colors[row];
+    for (int row = 0; row < model.spriteColors.size(); ++row) {
+        const PatternSpriteColor &entry = model.spriteColors[row];
         const QColor color = QColor::fromRgba(entry.rgba);
-        const DmcMatch match = DmcMatcher::nearest(entry.rgba);
+        const DmcMatch &match = entry.dmcMatch;
+        const QString symbol = (entry.matchedColorIndex >= 0 && entry.matchedColorIndex < model.matchedColors.size())
+            ? model.matchedColors[entry.matchedColorIndex].symbol
+            : QString();
 
+        auto *symbolItem = new QTableWidgetItem(symbol);
         auto *swatch = new QTableWidgetItem;
         swatch->setBackground(QBrush(color));
         swatch->setText(color.alpha() < 255 ? QStringLiteral("alpha %1").arg(color.alpha()) : QString());
 
-        auto *hex = new QTableWidgetItem(ImageAnalysis::rgbaToHex(entry.rgba));
+        auto *hex = new QTableWidgetItem(entry.hex);
         auto *pixels = new QTableWidgetItem;
         pixels->setData(Qt::DisplayRole, entry.pixels);
         auto *dmcNumber = new QTableWidgetItem(match.ok ? match.color.number : QString());
@@ -218,13 +265,14 @@ void MainWindow::showAnalysis(const QString &path, const QImage &image, const Im
         auto *distance = new QTableWidgetItem;
         distance->setData(Qt::DisplayRole, match.ok ? match.distanceSquared : 0);
 
-        m_colorTable->setItem(row, 0, swatch);
-        m_colorTable->setItem(row, 1, hex);
-        m_colorTable->setItem(row, 2, pixels);
-        m_colorTable->setItem(row, 3, dmcNumber);
-        m_colorTable->setItem(row, 4, dmcName);
-        m_colorTable->setItem(row, 5, dmcSwatch);
-        m_colorTable->setItem(row, 6, distance);
+        m_colorTable->setItem(row, 0, symbolItem);
+        m_colorTable->setItem(row, 1, swatch);
+        m_colorTable->setItem(row, 2, hex);
+        m_colorTable->setItem(row, 3, pixels);
+        m_colorTable->setItem(row, 4, dmcNumber);
+        m_colorTable->setItem(row, 5, dmcName);
+        m_colorTable->setItem(row, 6, dmcSwatch);
+        m_colorTable->setItem(row, 7, distance);
     }
 
     m_colorTable->setUpdatesEnabled(true);
@@ -233,6 +281,9 @@ void MainWindow::showAnalysis(const QString &path, const QImage &image, const Im
 }
 
 void MainWindow::clearImage(const QString &message) {
+    m_patternModel = PatternModel();
+    m_currentImagePath.clear();
+    m_exportCsvButton->setEnabled(false);
     m_pathLabel->setText(message);
     m_sizeLabel->setText(QStringLiteral("Size: -"));
     m_colorCountLabel->setText(QStringLiteral("Unique colors: -"));

@@ -12,8 +12,10 @@ This is the first experimental SpriteStitcher 3 prototype. It is intentionally s
 - Match each unique stitch color to the nearest built-in DMC floss color.
 - Show each unique stitch color, pixel count, DMC number, DMC name, DMC swatch, and squared RGB match distance in a simple table.
 - Display transparent pixels over a checkerboard preview background.
+- Build an internal pattern model with symbols and matched DMC stitch counts.
+- Export a CSV palette foundation with symbol, source sprite colors, source color count, DMC code, DMC name, and stitch count.
 
-Not included in this milestone: PDF export, Pattern Keeper export, CSV export, batch mode, website preview PNG export, or palette remapping.
+Not included in this milestone: PDF export, Pattern Keeper export, batch mode, website preview PNG export, or palette remapping.
 
 ## Dependencies
 

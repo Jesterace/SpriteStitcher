@@ -13,6 +13,8 @@ add_library(SpriteStitcher3Core STATIC
     src/DmcMatcher.h
     src/ImageAnalysis.cpp
     src/ImageAnalysis.h
+    src/PatternModel.cpp
+    src/PatternModel.h
 )
 
 target_include_directories(SpriteStitcher3Core PUBLIC src)
