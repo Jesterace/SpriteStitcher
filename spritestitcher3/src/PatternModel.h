@@ -42,13 +42,18 @@ public:
     int imageHeight = 0;
     int opaqueStitchPixels = 0;
     int transparentPixels = 0;
+    int alphaTransparentPixels = 0;
+    int backgroundTransparentPixels = 0;
+    bool backgroundColorTransparencyEnabled = false;
+    bool hasBackgroundColor = false;
+    QRgb backgroundColor = 0;
     QVector<PatternPixel> stitchPixels;
     QVector<QPoint> noStitchPixels;
     QVector<int> stitchGrid;
     QVector<PatternSpriteColor> spriteColors;
     QVector<PatternMatchedColor> matchedColors;
 
-    static PatternModel fromImage(const QImage &image);
+    static PatternModel fromImage(const QImage &image, const TransparencyOptions &options = TransparencyOptions());
     static PatternModel fromAnalysis(const ImageAnalysisResult &analysis);
 
     int uniqueSpriteColorCount() const;

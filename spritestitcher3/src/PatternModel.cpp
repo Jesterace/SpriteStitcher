@@ -23,8 +23,9 @@ QString csvEscape(const QString &value) {
 }
 }
 
-PatternModel PatternModel::fromImage(const QImage &image) {
-    PatternModel model = fromAnalysis(ImageAnalysis::analyze(image));
+PatternModel PatternModel::fromImage(const QImage &image, const TransparencyOptions &options) {
+    const TransparencyOptions resolvedOptions = ImageAnalysis::resolveTransparencyOptions(image, options);
+    PatternModel model = fromAnalysis(ImageAnalysis::analyze(image, resolvedOptions));
     if (!model.ok) {
         return model;
     }
@@ -43,7 +44,7 @@ PatternModel PatternModel::fromImage(const QImage &image) {
         const auto *line = reinterpret_cast<const QRgb *>(argbImage.constScanLine(y));
         for (int x = 0; x < argbImage.width(); ++x) {
             const QRgb rgba = line[x];
-            if (qAlpha(rgba) == 0) {
+            if (ImageAnalysis::isNoStitchPixel(rgba, resolvedOptions)) {
                 model.noStitchPixels.push_back(QPoint(x, y));
                 continue;
             }
@@ -71,6 +72,11 @@ PatternModel PatternModel::fromAnalysis(const ImageAnalysisResult &analysis) {
     model.imageWidth = analysis.width;
     model.imageHeight = analysis.height;
     model.transparentPixels = analysis.transparentPixels;
+    model.alphaTransparentPixels = analysis.alphaTransparentPixels;
+    model.backgroundTransparentPixels = analysis.backgroundTransparentPixels;
+    model.backgroundColorTransparencyEnabled = analysis.backgroundColorTransparencyEnabled;
+    model.hasBackgroundColor = analysis.hasBackgroundColor;
+    model.backgroundColor = analysis.backgroundColor;
 
     if (!analysis.ok) {
         return model;

@@ -2,6 +2,7 @@
 
 #include <QAbstractItemView>
 #include <QBrush>
+#include <QCheckBox>
 #include <QColor>
 #include <QComboBox>
 #include <QFileDialog>
@@ -105,10 +106,25 @@ void MainWindow::buildUi() {
     m_colorCountLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_transparentCountLabel = new QLabel(QStringLiteral("Transparent/background pixels: -"), summaryBox);
     m_transparentCountLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    m_backgroundTransparentCheckBox = new QCheckBox(QStringLiteral("Treat background color as transparent"), summaryBox);
+
+    auto *backgroundColorRow = new QWidget(summaryBox);
+    auto *backgroundColorLayout = new QHBoxLayout(backgroundColorRow);
+    backgroundColorLayout->setContentsMargins(0, 0, 0, 0);
+    m_backgroundColorSwatch = new QLabel(backgroundColorRow);
+    m_backgroundColorSwatch->setFixedSize(28, 18);
+    m_backgroundColorSwatch->setFrameShape(QFrame::StyledPanel);
+    m_backgroundColorSwatch->setAutoFillBackground(true);
+    m_backgroundColorLabel = new QLabel(QStringLiteral("Background color: -"), backgroundColorRow);
+    m_backgroundColorLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    backgroundColorLayout->addWidget(m_backgroundColorSwatch);
+    backgroundColorLayout->addWidget(m_backgroundColorLabel, 1);
 
     summaryLayout->addWidget(m_sizeLabel);
     summaryLayout->addWidget(m_colorCountLabel);
     summaryLayout->addWidget(m_transparentCountLabel);
+    summaryLayout->addWidget(m_backgroundTransparentCheckBox);
+    summaryLayout->addWidget(backgroundColorRow);
     detailsLayout->addWidget(summaryBox);
 
     auto *colorsBox = new QGroupBox(QStringLiteral("Unique Colors"), detailsPanel);
@@ -184,6 +200,8 @@ void MainWindow::buildUi() {
     connect(m_openButton, &QPushButton::clicked, this, &MainWindow::openPng);
     connect(m_exportCsvButton, &QPushButton::clicked, this, &MainWindow::exportCsv);
     connect(m_chartZoomCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] { refreshChartPreview(); });
+    connect(m_backgroundTransparentCheckBox, &QCheckBox::toggled, this, [this] { rebuildPattern(); });
+    updateBackgroundColorDisplay(QImage());
 }
 
 void MainWindow::openPng() {
@@ -241,14 +259,33 @@ void MainWindow::loadImage(const QString &path) {
         return;
     }
 
-    const PatternModel model = PatternModel::fromImage(image);
+    m_sourceImage = image;
+    m_currentImagePath = QFileInfo(path).absoluteFilePath();
+    rebuildPattern();
+}
+
+void MainWindow::rebuildPattern() {
+    if (m_sourceImage.isNull()) {
+        updateBackgroundColorDisplay(QImage());
+        return;
+    }
+
+    const TransparencyOptions options = currentTransparencyOptions();
+    const PatternModel model = PatternModel::fromImage(m_sourceImage, options);
     if (!model.ok) {
         clearImage(model.error);
         QMessageBox::warning(this, QStringLiteral("Open PNG"), model.error);
         return;
     }
 
-    showPattern(path, image, model);
+    showPattern(m_currentImagePath, ImageAnalysis::filteredImage(m_sourceImage, options), model);
+}
+
+TransparencyOptions MainWindow::currentTransparencyOptions() const {
+    TransparencyOptions options;
+    options.treatBackgroundColorAsTransparent = m_backgroundTransparentCheckBox &&
+        m_backgroundTransparentCheckBox->isChecked();
+    return options;
 }
 
 void MainWindow::showPattern(const QString &path, const QImage &image, const PatternModel &model) {
@@ -262,6 +299,7 @@ void MainWindow::showPattern(const QString &path, const QImage &image, const Pat
                                    .arg(model.uniqueSpriteColorCount())
                                    .arg(model.matchedColorCount()));
     m_transparentCountLabel->setText(QStringLiteral("Transparent/background pixels: %1").arg(model.transparentPixels));
+    updateBackgroundColorDisplay(m_sourceImage);
 
     const QPixmap pixmap = checkerboardPreview(image);
     m_imageLabel->setPixmap(pixmap);
@@ -316,6 +354,30 @@ void MainWindow::showPattern(const QString &path, const QImage &image, const Pat
     m_colorTable->setSortingEnabled(true);
 }
 
+void MainWindow::updateBackgroundColorDisplay(const QImage &image) {
+    if (!m_backgroundColorLabel || !m_backgroundColorSwatch) {
+        return;
+    }
+
+    QColor color(240, 240, 240);
+    if (image.isNull()) {
+        m_backgroundColorLabel->setText(QStringLiteral("Background color: -"));
+    } else {
+        const QImage argbImage = image.convertToFormat(QImage::Format_ARGB32);
+        const QRgb backgroundColor = argbImage.pixel(0, 0);
+        const QString suffix = (m_backgroundTransparentCheckBox && m_backgroundTransparentCheckBox->isChecked())
+            ? QString()
+            : QStringLiteral(" (not applied)");
+        m_backgroundColorLabel->setText(QStringLiteral("Background color: %1%2")
+            .arg(ImageAnalysis::rgbToHex(backgroundColor), suffix));
+        color = QColor(qRed(backgroundColor), qGreen(backgroundColor), qBlue(backgroundColor));
+    }
+
+    QPalette palette = m_backgroundColorSwatch->palette();
+    palette.setColor(QPalette::Window, color);
+    m_backgroundColorSwatch->setPalette(palette);
+}
+
 void MainWindow::refreshChartPreview() {
     if (!m_chartLabel || !m_chartScrollArea) return;
     if (!m_patternModel.ok || m_patternModel.imageWidth <= 0 || m_patternModel.imageHeight <= 0) {
@@ -339,6 +401,7 @@ void MainWindow::refreshChartPreview() {
 
 void MainWindow::clearImage(const QString &message) {
     m_patternModel = PatternModel();
+    m_sourceImage = QImage();
     m_currentImagePath.clear();
     m_exportCsvButton->setEnabled(false);
     m_pathLabel->setText(message);
@@ -347,6 +410,7 @@ void MainWindow::clearImage(const QString &message) {
     m_transparentCountLabel->setText(QStringLiteral("Transparent/background pixels: -"));
     m_colorTable->clearContents();
     m_colorTable->setRowCount(0);
+    updateBackgroundColorDisplay(QImage());
     m_imageLabel->setPixmap(QPixmap());
     m_imageLabel->setText(message);
     m_imageLabel->setMinimumSize(360, 260);

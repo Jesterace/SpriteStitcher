@@ -73,6 +73,81 @@ int main(int argc, char *argv[]) {
     const ColorEntry *fileGreen = findColor(fileResult.colors, QColor(0, 255, 0).rgba());
     if (!fileGreen || fileGreen->pixels != 1) return fail(QStringLiteral("PNG file opaque green pixel count was wrong."));
 
+    QImage greenBackgroundImage(3, 2, QImage::Format_ARGB32);
+    greenBackgroundImage.fill(QColor(71, 167, 47).rgba());
+    greenBackgroundImage.setPixel(1, 0, QColor(227, 29, 66).rgba());
+    greenBackgroundImage.setPixel(2, 1, QColor(0, 0, 255, 0).rgba());
+
+    const ImageAnalysisResult greenBackgroundDisabled = ImageAnalysis::analyze(greenBackgroundImage);
+    if (!greenBackgroundDisabled.ok) return fail(QStringLiteral("Expected green background image to analyze successfully."));
+    if (greenBackgroundDisabled.transparentPixels != 1) {
+        return fail(QStringLiteral("Disabled background filter should only count real alpha transparency."));
+    }
+    const ColorEntry *disabledGreen = findColor(greenBackgroundDisabled.colors, QColor(71, 167, 47).rgba());
+    if (!disabledGreen || disabledGreen->pixels != 4) {
+        return fail(QStringLiteral("Disabled background filter should count opaque green as a stitch color."));
+    }
+
+    const PatternModel greenPatternDisabled = PatternModel::fromImage(greenBackgroundImage);
+    if (!greenPatternDisabled.ok) return fail(QStringLiteral("Expected disabled green pattern to build successfully."));
+    if (greenPatternDisabled.opaqueStitchPixels != 5 || greenPatternDisabled.transparentPixels != 1) {
+        return fail(QStringLiteral("Disabled green pattern stitch/no-stitch counts were wrong."));
+    }
+    if (greenPatternDisabled.uniqueSpriteColorCount() != 2) {
+        return fail(QStringLiteral("Disabled green pattern should include green and red source colors."));
+    }
+    if (!greenPatternDisabled.toCsv().contains(QStringLiteral("#47A72FFF")) ||
+        !greenPatternDisabled.toCsv().contains(QStringLiteral(",702,Kelly Green,4\n"))) {
+        return fail(QStringLiteral("Disabled green pattern CSV should include the green stitch color."));
+    }
+
+    TransparencyOptions greenBackgroundOptions;
+    greenBackgroundOptions.treatBackgroundColorAsTransparent = true;
+    const ImageAnalysisResult greenBackgroundEnabled = ImageAnalysis::analyze(greenBackgroundImage, greenBackgroundOptions);
+    if (!greenBackgroundEnabled.ok) return fail(QStringLiteral("Expected enabled green background image to analyze successfully."));
+    if (!greenBackgroundEnabled.backgroundColorTransparencyEnabled || !greenBackgroundEnabled.hasBackgroundColor) {
+        return fail(QStringLiteral("Enabled background filter should record the selected background color."));
+    }
+    if (ImageAnalysis::rgbToHex(greenBackgroundEnabled.backgroundColor) != QStringLiteral("#47A72F")) {
+        return fail(QStringLiteral("Enabled background filter should use the top-left RGB color."));
+    }
+    if (greenBackgroundEnabled.transparentPixels != 5 ||
+        greenBackgroundEnabled.alphaTransparentPixels != 1 ||
+        greenBackgroundEnabled.backgroundTransparentPixels != 4) {
+        return fail(QStringLiteral("Enabled background filter transparent pixel counts were wrong."));
+    }
+    if (findColor(greenBackgroundEnabled.colors, QColor(71, 167, 47).rgba())) {
+        return fail(QStringLiteral("Enabled background filter should not count opaque green as a stitch color."));
+    }
+
+    const PatternModel greenPatternEnabled = PatternModel::fromImage(greenBackgroundImage, greenBackgroundOptions);
+    if (!greenPatternEnabled.ok) return fail(QStringLiteral("Expected enabled green pattern to build successfully."));
+    if (greenPatternEnabled.opaqueStitchPixels != 1 || greenPatternEnabled.transparentPixels != 5) {
+        return fail(QStringLiteral("Enabled green pattern stitch/no-stitch counts were wrong."));
+    }
+    if (greenPatternEnabled.alphaTransparentPixels != 1 || greenPatternEnabled.backgroundTransparentPixels != 4) {
+        return fail(QStringLiteral("Enabled green pattern transparency source counts were wrong."));
+    }
+    if (greenPatternEnabled.uniqueSpriteColorCount() != 1 || greenPatternEnabled.matchedColorCount() != 1) {
+        return fail(QStringLiteral("Enabled green pattern should only include the red stitch color."));
+    }
+    if (findColor(ImageAnalysis::analyze(greenBackgroundImage, greenBackgroundOptions).colors, QColor(71, 167, 47).rgba())) {
+        return fail(QStringLiteral("Enabled green pattern analysis should exclude green from unique colors."));
+    }
+    const QString greenEnabledCsv = greenPatternEnabled.toCsv();
+    if (greenEnabledCsv.contains(QStringLiteral("#47A72FFF")) ||
+        greenEnabledCsv.contains(QStringLiteral("Kelly Green")) ||
+        !greenEnabledCsv.contains(QStringLiteral("#E31D42FF,1,666,Bright Red,1\n"))) {
+        return fail(QStringLiteral("Enabled green pattern CSV should only include the red stitch color."));
+    }
+    const QImage greenEnabledChart = greenPatternEnabled.renderChartPreview(10);
+    if (greenEnabledChart.pixelColor(2, 2) != QColor(Qt::white)) {
+        return fail(QStringLiteral("Enabled green pattern chart should render green background as blank."));
+    }
+    if (greenEnabledChart.pixelColor(12, 2) == QColor(Qt::white)) {
+        return fail(QStringLiteral("Enabled green pattern chart should still render the red stitch."));
+    }
+
     const DmcMatch exactRed = DmcMatcher::nearest(QColor(227, 29, 66).rgba());
     if (!exactRed.ok) return fail(QStringLiteral("Expected exact DMC match to succeed."));
     if (exactRed.color.number != QStringLiteral("666")) return fail(QStringLiteral("Expected bright red to match DMC 666."));

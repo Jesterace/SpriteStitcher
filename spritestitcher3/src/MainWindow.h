@@ -6,6 +6,7 @@
 #include <QMainWindow>
 
 class QLabel;
+class QCheckBox;
 class QComboBox;
 class QPushButton;
 class QScrollArea;
@@ -24,7 +25,10 @@ private slots:
 private:
     void buildUi();
     void loadImage(const QString &path);
+    void rebuildPattern();
+    TransparencyOptions currentTransparencyOptions() const;
     void showPattern(const QString &path, const QImage &image, const PatternModel &model);
+    void updateBackgroundColorDisplay(const QImage &image);
     void refreshChartPreview();
     void clearImage(const QString &message);
 
@@ -34,6 +38,9 @@ private:
     QLabel *m_sizeLabel = nullptr;
     QLabel *m_colorCountLabel = nullptr;
     QLabel *m_transparentCountLabel = nullptr;
+    QCheckBox *m_backgroundTransparentCheckBox = nullptr;
+    QLabel *m_backgroundColorLabel = nullptr;
+    QLabel *m_backgroundColorSwatch = nullptr;
     QLabel *m_imageLabel = nullptr;
     QScrollArea *m_imageScrollArea = nullptr;
     QLabel *m_chartLabel = nullptr;
@@ -41,5 +48,6 @@ private:
     QComboBox *m_chartZoomCombo = nullptr;
     QTableWidget *m_colorTable = nullptr;
     PatternModel m_patternModel;
+    QImage m_sourceImage;
     QString m_currentImagePath;
 };
