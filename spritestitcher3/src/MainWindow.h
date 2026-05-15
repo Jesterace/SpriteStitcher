@@ -22,6 +22,7 @@ private slots:
     void openPng();
     void exportCsv();
     void exportChartPng();
+    void exportPdf();
 
 private:
     void buildUi();
@@ -37,6 +38,7 @@ private:
     QPushButton *m_openButton = nullptr;
     QPushButton *m_exportCsvButton = nullptr;
     QPushButton *m_exportChartPngButton = nullptr;
+    QPushButton *m_exportPdfButton = nullptr;
     QLabel *m_pathLabel = nullptr;
     QLabel *m_sizeLabel = nullptr;
     QLabel *m_colorCountLabel = nullptr;

@@ -60,6 +60,7 @@ public:
     int matchedColorCount() const;
     QImage renderChartPreview(int cellSize = 16, bool drawCenterLines = true) const;
     bool writeChartPngFile(const QString &path, int cellSize = 16, QString *errorMessage = nullptr) const;
+    bool writePdfFile(const QString &path, const QString &imageName, int chartCellSize = 16, QString *errorMessage = nullptr) const;
     QString toCsv() const;
     bool writeCsvFile(const QString &path, QString *errorMessage = nullptr) const;
 

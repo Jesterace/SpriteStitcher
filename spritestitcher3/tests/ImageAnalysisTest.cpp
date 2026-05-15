@@ -299,6 +299,31 @@ int main(int argc, char *argv[]) {
         return fail(QStringLiteral("Pattern chart PNG should contain centered symbol pixels."));
     }
 
+    const QString pdfPath = QDir(tempDir.path()).filePath(QStringLiteral("pattern.pdf"));
+    QString pdfError;
+    if (!pattern.writePdfFile(pdfPath, QStringLiteral("Test Sprite"), 10, &pdfError)) {
+        return fail(QStringLiteral("Pattern PDF write failed: ") + pdfError);
+    }
+
+    QFile pdfFile(pdfPath);
+    if (!pdfFile.exists() || pdfFile.size() <= 0) {
+        return fail(QStringLiteral("Pattern PDF file was not written."));
+    }
+    if (!pdfFile.open(QIODevice::ReadOnly)) {
+        return fail(QStringLiteral("Pattern PDF file could not be reopened."));
+    }
+    if (pdfFile.read(4) != QByteArray("%PDF")) {
+        return fail(QStringLiteral("Pattern PDF file did not contain a PDF header."));
+    }
+    pdfFile.seek(0);
+    const QByteArray pdfBytes = pdfFile.readAll();
+    if (pdfBytes.contains("PDF layout:") ||
+        pdfBytes.contains("Blank cells are unstitched background.") ||
+        pdfBytes.contains("Grid labels appear every 10 stitches.") ||
+        pdfBytes.contains("v2.9.5")) {
+        return fail(QStringLiteral("Pattern PDF should not contain legacy debug/status text."));
+    }
+
     const PatternModel emptyPattern = PatternModel::fromImage(QImage());
     if (emptyPattern.ok) return fail(QStringLiteral("Null image should not build a pattern model."));
 

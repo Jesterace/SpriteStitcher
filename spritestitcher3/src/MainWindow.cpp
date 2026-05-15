@@ -5,6 +5,8 @@
 #include <QCheckBox>
 #include <QColor>
 #include <QComboBox>
+#include <QDialog>
+#include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFrame>
@@ -48,6 +50,13 @@ QPixmap checkerboardPreview(const QImage &source) {
     painter.end();
     return QPixmap::fromImage(canvas);
 }
+
+QString withPdfSuffix(QString path) {
+    if (QFileInfo(path).suffix().compare(QStringLiteral("pdf"), Qt::CaseInsensitive) != 0) {
+        path += QStringLiteral(".pdf");
+    }
+    return path;
+}
 }
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
@@ -70,6 +79,8 @@ void MainWindow::buildUi() {
     m_exportCsvButton->setEnabled(false);
     m_exportChartPngButton = new QPushButton(QStringLiteral("Export Chart PNG..."), topBar);
     m_exportChartPngButton->setEnabled(false);
+    m_exportPdfButton = new QPushButton(QStringLiteral("Export PDF..."), topBar);
+    m_exportPdfButton->setEnabled(false);
     m_pathLabel = new QLabel(QStringLiteral("No image loaded."), topBar);
     m_pathLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_pathLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
@@ -77,6 +88,7 @@ void MainWindow::buildUi() {
     topLayout->addWidget(m_openButton);
     topLayout->addWidget(m_exportCsvButton);
     topLayout->addWidget(m_exportChartPngButton);
+    topLayout->addWidget(m_exportPdfButton);
     topLayout->addWidget(m_pathLabel, 1);
     root->addWidget(topBar);
 
@@ -203,6 +215,7 @@ void MainWindow::buildUi() {
     connect(m_openButton, &QPushButton::clicked, this, &MainWindow::openPng);
     connect(m_exportCsvButton, &QPushButton::clicked, this, &MainWindow::exportCsv);
     connect(m_exportChartPngButton, &QPushButton::clicked, this, &MainWindow::exportChartPng);
+    connect(m_exportPdfButton, &QPushButton::clicked, this, &MainWindow::exportPdf);
     connect(m_chartZoomCombo, qOverload<int>(&QComboBox::currentIndexChanged), this, [this] { refreshChartPreview(); });
     connect(m_backgroundTransparentCheckBox, &QCheckBox::toggled, this, [this] { rebuildPattern(); });
     updateBackgroundColorDisplay(QImage());
@@ -286,6 +299,54 @@ void MainWindow::exportChartPng() {
     QMessageBox::information(this, QStringLiteral("Export Chart PNG"), QStringLiteral("Chart PNG exported."));
 }
 
+void MainWindow::exportPdf() {
+    if (!m_patternModel.ok) {
+        QMessageBox::warning(this, QStringLiteral("Export PDF"), QStringLiteral("Open a PNG before exporting a PDF."));
+        return;
+    }
+
+    QString defaultDirectory;
+    QString defaultFileName = QStringLiteral("spritestitcher3_pattern.pdf");
+    QString imageName = QStringLiteral("Untitled Sprite");
+    if (!m_currentImagePath.isEmpty()) {
+        const QFileInfo info(m_currentImagePath);
+        imageName = info.completeBaseName();
+        defaultDirectory = info.dir().absolutePath();
+        defaultFileName = info.completeBaseName() + QStringLiteral(".pdf");
+    }
+
+    QFileDialog dialog(
+        this,
+        QStringLiteral("Export PDF"),
+        defaultDirectory,
+        QStringLiteral("PDF files (*.pdf)"));
+    dialog.setAcceptMode(QFileDialog::AcceptSave);
+    dialog.setFileMode(QFileDialog::AnyFile);
+    dialog.setDefaultSuffix(QStringLiteral("pdf"));
+    dialog.setOption(QFileDialog::DontUseNativeDialog, true);
+    dialog.selectFile(defaultFileName);
+    if (dialog.exec() != QDialog::Accepted || dialog.selectedFiles().isEmpty()) {
+        return;
+    }
+    const QString path = withPdfSuffix(dialog.selectedFiles().first());
+
+    QString error;
+    if (!m_patternModel.writePdfFile(path, imageName, currentChartCellSize(), &error)) {
+        QMessageBox::warning(
+            this,
+            QStringLiteral("Export PDF"),
+            QStringLiteral("Could not export PDF to:\n%1\n\n%2")
+                .arg(QDir::toNativeSeparators(path),
+                     error.isEmpty() ? QStringLiteral("Unknown error.") : error));
+        return;
+    }
+
+    QMessageBox::information(
+        this,
+        QStringLiteral("Export PDF"),
+        QStringLiteral("PDF exported:\n%1").arg(QDir::toNativeSeparators(path)));
+}
+
 void MainWindow::loadImage(const QString &path) {
     QImageReader reader(path);
     reader.setAutoTransform(true);
@@ -330,6 +391,7 @@ void MainWindow::showPattern(const QString &path, const QImage &image, const Pat
     m_currentImagePath = QFileInfo(path).absoluteFilePath();
     m_exportCsvButton->setEnabled(true);
     m_exportChartPngButton->setEnabled(true);
+    m_exportPdfButton->setEnabled(true);
 
     m_pathLabel->setText(m_currentImagePath);
     m_sizeLabel->setText(QStringLiteral("Size: %1 x %2 px").arg(model.imageWidth).arg(model.imageHeight));
@@ -446,6 +508,7 @@ void MainWindow::clearImage(const QString &message) {
     m_currentImagePath.clear();
     m_exportCsvButton->setEnabled(false);
     m_exportChartPngButton->setEnabled(false);
+    m_exportPdfButton->setEnabled(false);
     m_pathLabel->setText(message);
     m_sizeLabel->setText(QStringLiteral("Size: -"));
     m_colorCountLabel->setText(QStringLiteral("Unique colors: -"));
