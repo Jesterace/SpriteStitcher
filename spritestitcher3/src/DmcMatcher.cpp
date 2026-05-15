@@ -1,5 +1,6 @@
 #include "DmcMatcher.h"
 
+#include <algorithm>
 #include <limits>
 
 namespace {
@@ -496,6 +497,30 @@ QVector<DmcColor> buildPalette() {
         {"310", "Black", QColor(0,0,0)}
     };
 }
+
+int channelSpread(const QColor &color) {
+    const int minChannel = std::min(color.red(), std::min(color.green(), color.blue()));
+    const int maxChannel = std::max(color.red(), std::max(color.green(), color.blue()));
+    return maxChannel - minChannel;
+}
+
+int luminance(const QColor &color) {
+    return (color.red() * 299 + color.green() * 587 + color.blue() * 114) / 1000;
+}
+
+bool isVeryDarkNeutral(const QColor &color) {
+    return luminance(color) <= 75 && channelSpread(color) <= 16;
+}
+
+int neutralDarkAdjustedDistance(const QColor &source, const QColor &candidate) {
+    const int distance = DmcMatcher::colorDistanceSquared(source, candidate);
+    if (!isVeryDarkNeutral(source)) {
+        return distance;
+    }
+
+    const int candidateSpread = channelSpread(candidate);
+    return distance + candidateSpread * candidateSpread * 8;
+}
 }
 
 namespace DmcMatcher {
@@ -523,9 +548,12 @@ DmcMatch nearest(const QColor &color) {
 
     int bestIndex = 0;
     int bestDistance = std::numeric_limits<int>::max();
+    int bestScore = std::numeric_limits<int>::max();
     for (int i = 0; i < colors.size(); ++i) {
         const int distance = colorDistanceSquared(color, colors[i].color);
-        if (distance < bestDistance) {
+        const int score = neutralDarkAdjustedDistance(color, colors[i].color);
+        if (score < bestScore || (score == bestScore && distance < bestDistance)) {
+            bestScore = score;
             bestDistance = distance;
             bestIndex = i;
         }

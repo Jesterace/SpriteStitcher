@@ -11,6 +11,7 @@
 #include <QPen>
 #include <QPdfWriter>
 #include <QPoint>
+#include <QStringList>
 #include <QTextStream>
 #include <algorithm>
 #include <cmath>
@@ -51,7 +52,6 @@ void drawElidedText(QPainter &painter, const QRect &rect, const QString &text, i
 }
 
 void drawCenteredSymbol(QPainter &painter, const QRect &rect, const QString &symbol, const QColor &fill, ChartMode chartMode) {
-    Q_UNUSED(fill);
     if (symbol.isEmpty()) {
         return;
     }
@@ -60,28 +60,39 @@ void drawCenteredSymbol(QPainter &painter, const QRect &rect, const QString &sym
 
     QFont font = painter.font();
     font.setBold(true);
-    font.setPixelSize(std::max(7, static_cast<int>(rect.height() * 0.58)));
+    int symbolPixelSize = std::max(9, static_cast<int>(rect.height() * 0.86));
+    font.setPixelSize(symbolPixelSize);
+    QFontMetrics metrics(font);
+    while (symbolPixelSize > 6 &&
+           (metrics.horizontalAdvance(symbol) > rect.width() * 0.9 ||
+            metrics.height() > rect.height() * 0.94)) {
+        --symbolPixelSize;
+        font.setPixelSize(symbolPixelSize);
+        metrics = QFontMetrics(font);
+    }
     painter.setFont(font);
 
-    QFontMetrics metrics(font);
     const QRect textBounds = metrics.boundingRect(symbol);
-    QRect backingRect(
-        rect.left() + (rect.width() - textBounds.width()) / 2 - 3,
-        rect.top() + (rect.height() - textBounds.height()) / 2 - 3,
-        textBounds.width() + 6,
-        textBounds.height() + 6);
+    const QPoint textPos(
+        rect.left() + (rect.width() - textBounds.width()) / 2 - textBounds.left(),
+        rect.top() + (rect.height() - textBounds.height()) / 2 - textBounds.top());
+    QPainterPath path;
+    path.addText(textPos, font, symbol);
 
-    backingRect = backingRect.intersected(rect.adjusted(1, 1, -1, -1));
-
+    QColor textColor(Qt::black);
+    QColor outlineColor(Qt::white);
     if (chartMode == ChartMode::ColorAndSymbols) {
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(QColor(255, 255, 255, 220));
-        painter.drawRoundedRect(backingRect, 3, 3);
+        const int luminance = (fill.red() * 299 + fill.green() * 587 + fill.blue() * 114) / 1000;
+        textColor = luminance < 140 ? QColor(Qt::white) : QColor(Qt::black);
+        outlineColor = textColor == QColor(Qt::white) ? QColor(Qt::black) : QColor(Qt::white);
+
+        QPen outlinePen(outlineColor);
+        outlinePen.setWidthF(std::max(0.75, rect.width() * 0.035));
+        outlinePen.setJoinStyle(Qt::RoundJoin);
+        painter.strokePath(path, outlinePen);
     }
 
-    painter.setPen(Qt::black);
-    painter.setBrush(Qt::NoBrush);
-    painter.drawText(rect, Qt::AlignCenter, symbol);
+    painter.fillPath(path, textColor);
 
     painter.restore();
 }
@@ -380,8 +391,9 @@ bool PatternModel::writeChartPngFile(const QString &path, int cellSize, QString 
 }
 
 bool PatternModel::writePdfFile(const QString &path, const QString &imageName, int chartCellSize, QString *errorMessage) const {
-    const QImage colorChart = renderChartPreview(chartCellSize, true, ChartMode::ColorsOnly);
-    const QImage symbolChart = renderChartPreview(chartCellSize, true, ChartMode::SymbolsOnly);
+    const int pdfChartCellSize = std::max(chartCellSize, 24);
+    const QImage colorChart = renderChartPreview(pdfChartCellSize, true, ChartMode::ColorAndSymbols);
+    const QImage symbolChart = renderChartPreview(pdfChartCellSize, true, ChartMode::SymbolsOnly);
     if (colorChart.isNull() || symbolChart.isNull()) {
         if (errorMessage) {
             *errorMessage = ok
@@ -415,6 +427,9 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
     const int gap = pointsToPixels(10, dpi);
     const int smallGap = pointsToPixels(5, dpi);
     const int contentBottom = content.top() + content.height();
+    const int chartHorizontalInset = pointsToPixels(8, dpi);
+    const int chartTopInset = pointsToPixels(8, dpi);
+    const int chartBottomInset = pointsToPixels(18, dpi);
     int y = content.top();
 
     auto scaledChartSize = [&](const QImage &chart, int maxWidth, int maxHeight) {
@@ -476,6 +491,19 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
     chartTitleFont.setPointSize(12);
     const int chartTitleHeight = QFontMetrics(chartTitleFont).height();
 
+    QFont gridNumberFont = painter.font();
+    gridNumberFont.setBold(false);
+    gridNumberFont.setPointSize(8);
+    const QFontMetrics gridNumberMetrics(gridNumberFont);
+    const int gridNumberHeight = gridNumberMetrics.height();
+    const int lastXMarker = (imageWidth / 10) * 10;
+    const int lastYMarker = (imageHeight / 10) * 10;
+    const int maxGridMarker = std::max(lastXMarker, lastYMarker);
+    const int maxGridNumberWidth = maxGridMarker > 0
+        ? gridNumberMetrics.horizontalAdvance(QString::number(maxGridMarker))
+        : 0;
+    const int gridNumberPadding = pointsToPixels(3, dpi);
+
     QFont legendTitleFont = painter.font();
     legendTitleFont.setBold(true);
     legendTitleFont.setPointSize(12);
@@ -499,18 +527,73 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
         return true;
     };
 
+    auto chartSectionArea = [&](const QRect &area) {
+        if (area.width() <= chartHorizontalInset * 2 ||
+            area.height() <= chartTopInset + chartBottomInset) {
+            return QRect();
+        }
+        return area.adjusted(chartHorizontalInset, chartTopInset, -chartHorizontalInset, -chartBottomInset);
+    };
+
     auto drawChartSection = [&](const QString &heading, const QImage &chart, const QRect &area) {
+        const QRect sectionArea = chartSectionArea(area);
+        if (sectionArea.isEmpty()) {
+            return;
+        }
+
         painter.setFont(chartTitleFont);
         painter.setPen(Qt::black);
-        painter.drawText(QRect(area.left(), area.top(), area.width(), chartTitleHeight),
+        painter.drawText(QRect(sectionArea.left(), sectionArea.top(), sectionArea.width(), chartTitleHeight),
                          Qt::AlignLeft | Qt::AlignVCenter,
                          heading);
 
-        const int chartTop = area.top() + chartTitleHeight + smallGap;
-        const int chartMaxHeight = area.bottom() - chartTop + 1;
-        const QSize targetSize = scaledChartSize(chart, area.width(), chartMaxHeight);
-        const QRect chartRect(area.left(), chartTop, targetSize.width(), targetSize.height());
+        const bool drawTopNumbers = imageWidth >= 10;
+        const bool drawLeftNumbers = imageHeight >= 10;
+        const int topNumberMargin = drawTopNumbers ? gridNumberHeight + gridNumberPadding : 0;
+        const int leftNumberMargin = drawLeftNumbers ? maxGridNumberWidth + gridNumberPadding : 0;
+        const int chartLeft = sectionArea.left() + leftNumberMargin;
+        const int chartTop = sectionArea.top() + chartTitleHeight + smallGap + topNumberMargin;
+        const int chartMaxWidth = sectionArea.right() - chartLeft + 1;
+        const int chartMaxHeight = sectionArea.bottom() - chartTop + 1;
+        if (chartMaxWidth <= 0 || chartMaxHeight <= 0) {
+            return;
+        }
+
+        const QSize targetSize = scaledChartSize(chart, chartMaxWidth, chartMaxHeight);
+        const QRect chartRect(chartLeft, chartTop, targetSize.width(), targetSize.height());
         painter.drawImage(chartRect, chart);
+
+        painter.setFont(gridNumberFont);
+        painter.setPen(QColor(70, 70, 70));
+        if (drawTopNumbers) {
+            for (int marker = 10; marker <= imageWidth; marker += 10) {
+                const QString label = QString::number(marker);
+                const int labelWidth = std::max(maxGridNumberWidth, gridNumberMetrics.horizontalAdvance(label));
+                const int centerX = chartRect.left() + static_cast<int>(std::round(static_cast<double>(marker) / imageWidth * chartRect.width()));
+                const int labelLeft = std::clamp(
+                    centerX - labelWidth / 2,
+                    chartRect.left(),
+                    std::max(chartRect.left(), chartRect.right() - labelWidth + 1));
+                painter.drawText(
+                    QRect(labelLeft, chartRect.top() - topNumberMargin, labelWidth, gridNumberHeight),
+                    Qt::AlignCenter,
+                    label);
+            }
+        }
+        if (drawLeftNumbers) {
+            for (int marker = 10; marker <= imageHeight; marker += 10) {
+                const QString label = QString::number(marker);
+                const int centerY = chartRect.top() + static_cast<int>(std::round(static_cast<double>(marker) / imageHeight * chartRect.height()));
+                const int labelTop = std::clamp(
+                    centerY - gridNumberHeight / 2,
+                    chartRect.top(),
+                    std::max(chartRect.top(), chartRect.bottom() - gridNumberHeight + 1));
+                painter.drawText(
+                    QRect(chartRect.left() - leftNumberMargin, labelTop, leftNumberMargin - gridNumberPadding, gridNumberHeight),
+                    Qt::AlignRight | Qt::AlignVCenter,
+                    label);
+            }
+        }
     };
 
     auto legendColumnWidths = [](int tableWidth) {
@@ -609,25 +692,118 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
         return legendIndex;
     };
 
-    const int firstPageTop = y;
+    auto legendRowCapacity = [&](const QRect &tableArea) {
+        const int headerHeight = legendTitleHeight + smallGap + rowHeight;
+        if (tableArea.height() < headerHeight) {
+            return -1;
+        }
+        return (tableArea.height() - headerHeight) / rowHeight;
+    };
+
+    auto legendFits = [&](const QRect &tableArea) {
+        return legendRowCapacity(tableArea) >= matchedColors.size();
+    };
+
+    auto chartTargetSizeForArea = [&](const QImage &chart, const QRect &area) {
+        const QRect sectionArea = chartSectionArea(area);
+        if (sectionArea.isEmpty()) {
+            return QSize();
+        }
+
+        const bool drawTopNumbers = imageWidth >= 10;
+        const bool drawLeftNumbers = imageHeight >= 10;
+        const int topNumberMargin = drawTopNumbers ? gridNumberHeight + gridNumberPadding : 0;
+        const int leftNumberMargin = drawLeftNumbers ? maxGridNumberWidth + gridNumberPadding : 0;
+        const int chartLeft = sectionArea.left() + leftNumberMargin;
+        const int chartTop = sectionArea.top() + chartTitleHeight + smallGap + topNumberMargin;
+        const int chartMaxWidth = sectionArea.right() - chartLeft + 1;
+        const int chartMaxHeight = sectionArea.bottom() - chartTop + 1;
+        if (chartMaxWidth <= 0 || chartMaxHeight <= 0) {
+            return QSize();
+        }
+        return scaledChartSize(chart, chartMaxWidth, chartMaxHeight);
+    };
+
+    auto effectiveCellSize = [&](const QImage &chart, const QRect &area) {
+        const QSize targetSize = chartTargetSizeForArea(chart, area);
+        if (targetSize.isEmpty() || imageWidth <= 0 || imageHeight <= 0) {
+            return 0.0;
+        }
+        return std::min(
+            static_cast<double>(targetSize.width()) / imageWidth,
+            static_cast<double>(targetSize.height()) / imageHeight);
+    };
+
+    auto drawLegendPages = [&](int startIndex, bool continued) {
+        int legendIndex = startIndex;
+        bool drewPage = false;
+        while (legendIndex < matchedColors.size() || !drewPage) {
+            const QRect legendArea(content.left(), content.top(), content.width(), content.height());
+            const int nextLegendIndex = drawLegendRows(legendArea, legendIndex, continued || legendIndex > startIndex);
+            drewPage = true;
+            if (matchedColors.isEmpty()) {
+                return true;
+            }
+            if (nextLegendIndex == legendIndex) {
+                if (errorMessage) {
+                    *errorMessage = QStringLiteral("Could not fit legend rows in the PDF.");
+                }
+                return false;
+            }
+            legendIndex = nextLegendIndex;
+            if (legendIndex < matchedColors.size() && !newPage()) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    const double colorMinReadableCell = pointsToPixels(8, dpi);
+    const double symbolMinReadableCell = pointsToPixels(9, dpi);
     const int minSideLegendWidth = pointsToPixels(185, dpi);
     const int minChartWidth = pointsToPixels(260, dpi);
     const int desiredSideLegendWidth = content.width() * 42 / 100;
-    const int maxSideLegendWidth = content.width() - gap - minChartWidth;
-    const bool sideBySideAvailable = maxSideLegendWidth >= minSideLegendWidth;
-    int continuationStart = 0;
+    const int fullLegendHeight = legendTitleHeight + smallGap + rowHeight * (matchedColors.size() + 1);
 
-    if (sideBySideAvailable) {
-        const int sideLegendWidth = std::min(std::max(desiredSideLegendWidth, minSideLegendWidth), maxSideLegendWidth);
-        const int chartWidth = content.width() - gap - sideLegendWidth;
-        const QRect chartArea(content.left(), firstPageTop, chartWidth, contentBottom - firstPageTop);
-        const QRect legendArea(chartArea.right() + 1 + gap, firstPageTop, sideLegendWidth, contentBottom - firstPageTop);
+    auto drawChartWithBestLegend = [&](const QString &heading, const QImage &chart, int pageTop, double minReadableCell) {
+        const QRect pageArea(content.left(), pageTop, content.width(), contentBottom - pageTop);
+        const int maxSideLegendWidth = pageArea.width() - gap - minChartWidth;
 
-        drawChartSection(QStringLiteral("Color Chart"), colorChart, chartArea);
-        continuationStart = std::max(continuationStart, drawLegendRows(legendArea, 0, false));
-    } else {
-        const QRect chartArea(content.left(), firstPageTop, content.width(), contentBottom - firstPageTop);
-        drawChartSection(QStringLiteral("Color Chart"), colorChart, chartArea);
+        if (maxSideLegendWidth >= minSideLegendWidth) {
+            const int sideLegendWidth = std::min(std::max(desiredSideLegendWidth, minSideLegendWidth), maxSideLegendWidth);
+            const int chartWidth = pageArea.width() - gap - sideLegendWidth;
+            const QRect chartArea(pageArea.left(), pageArea.top(), chartWidth, pageArea.height());
+            const QRect legendArea(chartArea.right() + 1 + gap, pageArea.top(), sideLegendWidth, pageArea.height());
+
+            if (effectiveCellSize(chart, chartArea) >= minReadableCell && legendFits(legendArea)) {
+                drawChartSection(heading, chart, chartArea);
+                drawLegendRows(legendArea, 0, false);
+                return true;
+            }
+        }
+
+        if (fullLegendHeight + gap < pageArea.height()) {
+            const int chartHeight = pageArea.height() - gap - fullLegendHeight;
+            const QRect chartArea(pageArea.left(), pageArea.top(), pageArea.width(), chartHeight);
+            const QRect legendArea(pageArea.left(), chartArea.bottom() + 1 + gap, pageArea.width(), fullLegendHeight);
+
+            if (effectiveCellSize(chart, chartArea) >= minReadableCell && legendFits(legendArea)) {
+                drawChartSection(heading, chart, chartArea);
+                drawLegendRows(legendArea, 0, false);
+                return true;
+            }
+        }
+
+        drawChartSection(heading, chart, pageArea);
+        if (!newPage()) {
+            return false;
+        }
+        return drawLegendPages(0, false);
+    };
+
+    if (!drawChartWithBestLegend(QStringLiteral("Color Chart"), colorChart, y, colorMinReadableCell)) {
+        painter.end();
+        return false;
     }
 
     if (!newPage()) {
@@ -635,36 +811,9 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
         return false;
     }
 
-    if (sideBySideAvailable) {
-        const int sideLegendWidth = std::min(std::max(desiredSideLegendWidth, minSideLegendWidth), maxSideLegendWidth);
-        const int chartWidth = content.width() - gap - sideLegendWidth;
-        const QRect chartArea(content.left(), content.top(), chartWidth, content.height());
-        const QRect legendArea(chartArea.right() + 1 + gap, content.top(), sideLegendWidth, content.height());
-
-        drawChartSection(QStringLiteral("Black-and-White Symbol Chart"), symbolChart, chartArea);
-        continuationStart = std::max(continuationStart, drawLegendRows(legendArea, 0, false));
-    } else {
-        const QRect chartArea(content.left(), content.top(), content.width(), content.height());
-        drawChartSection(QStringLiteral("Black-and-White Symbol Chart"), symbolChart, chartArea);
-    }
-
-    int legendIndex = continuationStart;
-    while (legendIndex < matchedColors.size()) {
-        if (!newPage()) {
-            painter.end();
-            return false;
-        }
-
-        const QRect legendArea(content.left(), content.top(), content.width(), content.height());
-        const int nextLegendIndex = drawLegendRows(legendArea, legendIndex, legendIndex > 0);
-        if (nextLegendIndex == legendIndex) {
-            if (errorMessage) {
-                *errorMessage = QStringLiteral("Could not fit legend rows in the PDF.");
-            }
-            painter.end();
-            return false;
-        }
-        legendIndex = nextLegendIndex;
+    if (!drawChartWithBestLegend(QStringLiteral("Black-and-White Symbol Chart"), symbolChart, content.top(), symbolMinReadableCell)) {
+        painter.end();
+        return false;
     }
 
     painter.end();
@@ -709,13 +858,54 @@ bool PatternModel::writeCsvFile(const QString &path, QString *errorMessage) cons
 QString PatternModel::symbolForIndex(int index) {
     if (index < 0) return QString();
 
-    QString symbol;
-    int value = index;
-    do {
-        const int letter = value % 26;
-        symbol.prepend(QChar(QLatin1Char('A' + letter)));
-        value = value / 26 - 1;
-    } while (value >= 0);
+    static const QStringList symbols{
+        QStringLiteral("●"),
+        QStringLiteral("○"),
+        QStringLiteral("■"),
+        QStringLiteral("□"),
+        QStringLiteral("▲"),
+        QStringLiteral("△"),
+        QStringLiteral("◆"),
+        QStringLiteral("◇"),
+        QStringLiteral("✕"),
+        QStringLiteral("+"),
+        QStringLiteral("/"),
+        QStringLiteral("\\"),
+        QStringLiteral("="),
+        QStringLiteral("#"),
+        QStringLiteral("*"),
+        QStringLiteral("★"),
+        QStringLiteral("☆"),
+        QStringLiteral("✚"),
+        QStringLiteral("✦"),
+        QStringLiteral("✧"),
+        QStringLiteral("◐"),
+        QStringLiteral("◑"),
+        QStringLiteral("◒"),
+        QStringLiteral("◓"),
+        QStringLiteral("◢"),
+        QStringLiteral("◣"),
+        QStringLiteral("◤"),
+        QStringLiteral("◥"),
+        QStringLiteral("◧"),
+        QStringLiteral("◨"),
+        QStringLiteral("◩"),
+        QStringLiteral("◪"),
+        QStringLiteral("◫"),
+        QStringLiteral("⊕"),
+        QStringLiteral("⊗"),
+        QStringLiteral("⊙"),
+        QStringLiteral("⊡"),
+        QStringLiteral("⊞"),
+        QStringLiteral("◈"),
+        QStringLiteral("▣")
+    };
 
-    return symbol;
+    if (index < symbols.size()) {
+        return symbols[index];
+    }
+
+    return QStringLiteral("%1%2")
+        .arg(symbols[index % symbols.size()])
+        .arg(index / symbols.size() + 1);
 }

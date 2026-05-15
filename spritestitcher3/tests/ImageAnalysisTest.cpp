@@ -12,10 +12,12 @@
 #include <QProcess>
 #include <QStandardPaths>
 #include <QTemporaryDir>
+#include <cstdio>
 
 namespace {
 int fail(const QString &message) {
     qWarning().noquote() << message;
+    std::fprintf(stderr, "%s\n", message.toLocal8Bit().constData());
     return 1;
 }
 
@@ -86,6 +88,118 @@ bool cellPixelsDiffer(const QImage &left, const QImage &right, const QRect &cell
         }
     }
     return false;
+}
+
+int lightBackingPixelCount(const QImage &image, const QRect &cell) {
+    int count = 0;
+    for (int y = cell.top(); y <= cell.bottom(); ++y) {
+        for (int x = cell.left(); x <= cell.right(); ++x) {
+            const QColor pixel = image.pixelColor(x, y);
+            if (pixel.red() >= 235 && pixel.green() >= 180 && pixel.blue() >= 180) {
+                ++count;
+            }
+        }
+    }
+    return count;
+}
+
+bool isPdfRedChartPixel(const QColor &pixel) {
+    return pixel.red() >= 150 &&
+           pixel.green() <= 120 &&
+           pixel.blue() <= 140 &&
+           pixel.red() > pixel.green() + 50;
+}
+
+bool isPdfLightPixel(const QColor &pixel) {
+    return pixel.red() >= 230 && pixel.green() >= 200 && pixel.blue() >= 200;
+}
+
+bool isPdfDarkPixel(const QColor &pixel) {
+    return pixel.red() <= 100 && pixel.green() <= 100 && pixel.blue() <= 100;
+}
+
+bool pageContainsColorChartSymbolOverlay(const QImage &page) {
+    if (page.isNull()) {
+        return false;
+    }
+
+    const QRect searchArea(
+        0,
+        page.height() / 6,
+        page.width() * 2 / 3,
+        page.height() * 2 / 3);
+    const int radius = 18;
+    for (int y = searchArea.top() + radius; y <= searchArea.bottom() - radius; ++y) {
+        for (int x = searchArea.left() + radius; x <= searchArea.right() - radius; ++x) {
+            if (!isPdfDarkPixel(page.pixelColor(x, y))) {
+                continue;
+            }
+
+            int redCount = 0;
+            int lightCount = 0;
+            int darkCount = 0;
+            for (int sampleY = y - radius; sampleY <= y + radius; ++sampleY) {
+                for (int sampleX = x - radius; sampleX <= x + radius; ++sampleX) {
+                    const QColor sample = page.pixelColor(sampleX, sampleY);
+                    if (isPdfRedChartPixel(sample)) {
+                        ++redCount;
+                    }
+                    if (isPdfLightPixel(sample)) {
+                        ++lightCount;
+                    }
+                    if (isPdfDarkPixel(sample)) {
+                        ++darkCount;
+                    }
+                }
+            }
+
+            if (redCount >= 120 && lightCount >= 40 && darkCount >= 4) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+int denseRedChartColumnCount(const QImage &page) {
+    if (page.isNull()) {
+        return 0;
+    }
+
+    const QRect searchArea(
+        0,
+        page.height() / 6,
+        page.width(),
+        page.height() * 2 / 3);
+    const int denseColumnThreshold = std::max(30, searchArea.height() / 14);
+    int denseColumns = 0;
+    for (int x = searchArea.left(); x <= searchArea.right(); ++x) {
+        int redPixels = 0;
+        for (int y = searchArea.top(); y <= searchArea.bottom(); ++y) {
+            if (isPdfRedChartPixel(page.pixelColor(x, y))) {
+                ++redPixels;
+            }
+        }
+        if (redPixels >= denseColumnThreshold) {
+            ++denseColumns;
+        }
+    }
+    return denseColumns;
+}
+
+int bottomMarginBelowRedChartPixels(const QImage &page) {
+    if (page.isNull()) {
+        return 0;
+    }
+
+    for (int y = page.height() - 1; y >= 0; --y) {
+        for (int x = 0; x < page.width(); ++x) {
+            if (isPdfRedChartPixel(page.pixelColor(x, y))) {
+                return page.height() - 1 - y;
+            }
+        }
+    }
+    return page.height();
 }
 }
 
@@ -229,11 +343,82 @@ int main(int argc, char *argv[]) {
     }
     if (nearBlack.distanceSquared != 25) return fail(QStringLiteral("Expected near-black distance to be 25."));
 
+    const DmcMatch neutralDark = DmcMatcher::nearest(QColor(49, 50, 49).rgba());
+    if (!neutralDark.ok || neutralDark.color.number == QStringLiteral("934")) {
+        return fail(QStringLiteral("Neutral dark colors should not drift to greenish DMC 934."));
+    }
+    if (neutralDark.color.number != QStringLiteral("3799") &&
+        neutralDark.color.number != QStringLiteral("844") &&
+        neutralDark.color.number != QStringLiteral("413") &&
+        neutralDark.color.number != QStringLiteral("310")) {
+        return fail(QStringLiteral("Neutral dark colors should prefer black or dark gray DMC colors."));
+    }
+
+    const DmcMatch greenBlack = DmcMatcher::nearest(QColor(49, 57, 25).rgba());
+    if (!greenBlack.ok || greenBlack.color.number != QStringLiteral("934")) {
+        return fail(QStringLiteral("Actually green-black colors should still be allowed to match DMC 934."));
+    }
+
     const DmcMatch exactWhite = DmcMatcher::nearest(QColor(252, 251, 248).rgba());
     if (!exactWhite.ok) return fail(QStringLiteral("Expected exact White DMC match to succeed."));
     if (exactWhite.color.number != QStringLiteral("White")) return fail(QStringLiteral("Expected White DMC code to remain text."));
     if (exactWhite.color.name != QStringLiteral("White")) return fail(QStringLiteral("Expected White DMC name to be White."));
     if (exactWhite.distanceSquared != 0) return fail(QStringLiteral("Expected exact White DMC distance to be zero."));
+
+    const QStringList expectedChartSymbols{
+        QStringLiteral("●"),
+        QStringLiteral("○"),
+        QStringLiteral("■"),
+        QStringLiteral("□"),
+        QStringLiteral("▲"),
+        QStringLiteral("△"),
+        QStringLiteral("◆"),
+        QStringLiteral("◇"),
+        QStringLiteral("✕"),
+        QStringLiteral("+"),
+        QStringLiteral("/"),
+        QStringLiteral("\\"),
+        QStringLiteral("="),
+        QStringLiteral("#"),
+        QStringLiteral("*")
+    };
+    const QVector<QColor> symbolSetColors{
+        QColor(197, 197, 197), // 01
+        QColor(171, 171, 171), // 02
+        QColor(144, 143, 144), // 03
+        QColor(103, 100, 100), // 04
+        QColor(187, 175, 165), // 05
+        QColor(180, 162, 147), // 06
+        QColor(116, 98, 86),   // 07
+        QColor(105, 91, 80),   // 08
+        QColor(72, 56, 55),    // 09
+        QColor(206, 206, 184), // 10
+        QColor(224, 220, 132), // 11
+        QColor(207, 198, 98),  // 12
+        QColor(152, 194, 156), // 13
+        QColor(206, 209, 148), // 14
+        QColor(205, 214, 132)  // 15
+    };
+    QImage symbolSetImage(symbolSetColors.size(), 1, QImage::Format_ARGB32);
+    for (int x = 0; x < symbolSetColors.size(); ++x) {
+        symbolSetImage.setPixel(x, 0, symbolSetColors[x].rgba());
+    }
+    const PatternModel symbolSetPattern = PatternModel::fromImage(symbolSetImage);
+    if (!symbolSetPattern.ok ||
+        symbolSetPattern.matchedColors.size() != expectedChartSymbols.size()) {
+        return fail(QStringLiteral("Expected symbol set pattern to build with one matched color per test color."));
+    }
+    if (symbolSetPattern.matchedColors[0].symbol == QStringLiteral("A") ||
+        symbolSetPattern.matchedColors[1].symbol == QStringLiteral("B")) {
+        return fail(QStringLiteral("Pattern symbols should not use the old letter-only assignment."));
+    }
+    const QStringList symbolSetCsvLines = symbolSetPattern.toCsv().trimmed().split(QLatin1Char('\n'));
+    for (int i = 0; i < expectedChartSymbols.size(); ++i) {
+        if (symbolSetPattern.matchedColors[i].symbol != expectedChartSymbols[i] ||
+            !symbolSetCsvLines.value(i + 1).startsWith(expectedChartSymbols[i] + QLatin1Char(','))) {
+            return fail(QStringLiteral("Pattern symbols should use the cross-stitch symbol set consistently."));
+        }
+    }
 
     QImage dmcSortImage(15, 1, QImage::Format_ARGB32);
     int dmcSortX = 0;
@@ -259,26 +444,27 @@ int main(int argc, char *argv[]) {
         if (dmcSortPattern.matchedColors[i].dmc.number != expectedDmcCodes[i]) {
             return fail(QStringLiteral("DMC matched colors were not sorted in natural code order."));
         }
-        if (dmcSortPattern.matchedColors[i].symbol != QString(QChar(QLatin1Char('A' + i)))) {
+        if (dmcSortPattern.matchedColors[i].symbol != expectedChartSymbols[i]) {
             return fail(QStringLiteral("DMC sorted symbol assignment was wrong."));
         }
     }
     const QStringList dmcSortCsvLines = dmcSortPattern.toCsv().trimmed().split(QLatin1Char('\n'));
     for (int i = 0; i < expectedDmcCodes.size(); ++i) {
         const QString expectedFragment = QStringLiteral(",%1,").arg(expectedDmcCodes[i]);
-        if (!dmcSortCsvLines.value(i + 1).contains(expectedFragment)) {
+        if (!dmcSortCsvLines.value(i + 1).startsWith(expectedChartSymbols[i] + QLatin1Char(',')) ||
+            !dmcSortCsvLines.value(i + 1).contains(expectedFragment)) {
             return fail(QStringLiteral("DMC CSV rows were not sorted in natural code order."));
         }
     }
     const PatternSpriteColor *sortBlue825 = findSpriteColor(dmcSortPattern, QColor(71, 129, 165).rgba());
     const PatternSpriteColor *sortWhite = findSpriteColor(dmcSortPattern, QColor(252, 251, 248).rgba());
     if (!sortBlue825 || sortBlue825->matchedColorIndex != 3 ||
-        dmcSortPattern.matchedColors[sortBlue825->matchedColorIndex].symbol != QStringLiteral("D")) {
-        return fail(QStringLiteral("DMC 825 sprite color should map to sorted symbol D."));
+        dmcSortPattern.matchedColors[sortBlue825->matchedColorIndex].symbol != expectedChartSymbols[3]) {
+        return fail(QStringLiteral("DMC 825 sprite color should map to the sorted symbol."));
     }
     if (!sortWhite || sortWhite->matchedColorIndex != 4 ||
-        dmcSortPattern.matchedColors[sortWhite->matchedColorIndex].symbol != QStringLiteral("E")) {
-        return fail(QStringLiteral("White sprite color should sort after numeric DMC codes and map to symbol E."));
+        dmcSortPattern.matchedColors[sortWhite->matchedColorIndex].symbol != expectedChartSymbols[4]) {
+        return fail(QStringLiteral("White sprite color should sort after numeric DMC codes and map to the sorted symbol."));
     }
     const int firstGridSpriteIndex = dmcSortPattern.stitchGrid.value(0, -1);
     if (firstGridSpriteIndex < 0 ||
@@ -311,7 +497,7 @@ int main(int argc, char *argv[]) {
     if (pattern.matchedColorCount() != 2) return fail(QStringLiteral("Pattern model matched DMC color count was wrong."));
 
     const PatternMatchedColor &redMatch = pattern.matchedColors[0];
-    if (redMatch.symbol != QStringLiteral("A")) return fail(QStringLiteral("First matched color should use symbol A."));
+    if (redMatch.symbol != expectedChartSymbols[0]) return fail(QStringLiteral("First matched color should use the first chart symbol."));
     if (redMatch.dmc.number != QStringLiteral("666")) return fail(QStringLiteral("Expected first matched color to be DMC 666."));
     if (redMatch.stitchCount != 3) return fail(QStringLiteral("DMC 666 stitch count should aggregate two sprite reds."));
     if (redMatch.sourceColorCount() != 2) return fail(QStringLiteral("DMC 666 source color count should be 2."));
@@ -321,15 +507,15 @@ int main(int argc, char *argv[]) {
     }
 
     const PatternMatchedColor &greenMatch = pattern.matchedColors[1];
-    if (greenMatch.symbol != QStringLiteral("B")) return fail(QStringLiteral("Second matched color should use symbol B."));
+    if (greenMatch.symbol != expectedChartSymbols[1]) return fail(QStringLiteral("Second matched color should use the second chart symbol."));
     if (greenMatch.dmc.number != QStringLiteral("702")) return fail(QStringLiteral("Expected second matched color to be DMC 702."));
     if (greenMatch.stitchCount != 1) return fail(QStringLiteral("DMC 702 stitch count was wrong."));
     if (greenMatch.sourceColorCount() != 1) return fail(QStringLiteral("DMC 702 source color count should be 1."));
 
     const QString expectedCsv =
         QStringLiteral("symbol,source_sprite_colors,source_color_count,dmc_code,dmc_name,stitch_count\n")
-        + QStringLiteral("A,#E31D42FF; #E41D42FF,2,666,Bright Red,3\n")
-        + QStringLiteral("B,#47A72FFF,1,702,Kelly Green,1\n");
+        + expectedChartSymbols[0] + QStringLiteral(",#E31D42FF; #E41D42FF,2,666,Bright Red,3\n")
+        + expectedChartSymbols[1] + QStringLiteral(",#47A72FFF,1,702,Kelly Green,1\n");
     if (pattern.toCsv() != expectedCsv) return fail(QStringLiteral("Pattern CSV output was wrong."));
     if (pattern.finishedSizeText(14) != QStringLiteral("14-count Aida: 0.29 x 0.14 in")) {
         return fail(QStringLiteral("14-count finished size text was wrong."));
@@ -383,6 +569,9 @@ int main(int argc, char *argv[]) {
     }
     if (!cellContainsHighContrastSymbolPixel(stitchChart, QRect(1, 1, 8, 8))) {
         return fail(QStringLiteral("Color + Symbols chart should draw readable high-contrast symbol pixels over colored cells."));
+    }
+    if (lightBackingPixelCount(stitchChart, QRect(1, 1, 8, 8)) > 28) {
+        return fail(QStringLiteral("Color + Symbols chart should not draw a filled light backing behind symbols."));
     }
 
     const QImage symbolsOnlyChart = pattern.renderChartPreview(10, true, ChartMode::SymbolsOnly);
@@ -520,6 +709,149 @@ int main(int argc, char *argv[]) {
         }
         if (!(colorChartIndex < firstLegendIndex && firstLegendIndex < symbolChartIndex && symbolChartIndex < secondLegendIndex)) {
             return fail(QStringLiteral("Pattern PDF should place a side legend with each chart page."));
+        }
+
+        const QString pdfToPpm = QStandardPaths::findExecutable(QStringLiteral("pdftoppm"));
+        if (!pdfToPpm.isEmpty()) {
+            QImage pdfSymbolImage(4, 4, QImage::Format_ARGB32);
+            pdfSymbolImage.fill(redFill.rgba());
+            const PatternModel pdfSymbolPattern = PatternModel::fromImage(pdfSymbolImage);
+            if (!pdfSymbolPattern.ok) {
+                return fail(QStringLiteral("Expected PDF symbol-overlay pattern to build successfully."));
+            }
+
+            const QString pdfSymbolPath = QDir(tempDir.path()).filePath(QStringLiteral("pdf-symbol-overlay.pdf"));
+            if (!pdfSymbolPattern.writePdfFile(pdfSymbolPath, QStringLiteral("PDF Symbol Overlay Sprite"), 10, &pdfError)) {
+                return fail(QStringLiteral("PDF symbol-overlay write failed: ") + pdfError);
+            }
+
+            const QString firstPagePrefix = QDir(tempDir.path()).filePath(QStringLiteral("pdf-symbol-overlay-page1"));
+            const int rasterExitCode = QProcess::execute(pdfToPpm, {
+                QStringLiteral("-f"),
+                QStringLiteral("1"),
+                QStringLiteral("-l"),
+                QStringLiteral("1"),
+                QStringLiteral("-singlefile"),
+                QStringLiteral("-png"),
+                QStringLiteral("-r"),
+                QStringLiteral("144"),
+                pdfSymbolPath,
+                firstPagePrefix
+            });
+            if (rasterExitCode != 0) {
+                return fail(QStringLiteral("pdftoppm could not rasterize the PDF symbol-overlay page."));
+            }
+
+            QImage firstPageImage;
+            if (!firstPageImage.load(firstPagePrefix + QStringLiteral(".png"), "PNG")) {
+                return fail(QStringLiteral("Could not load rasterized PDF symbol-overlay page."));
+            }
+            if (!pageContainsColorChartSymbolOverlay(firstPageImage)) {
+                return fail(QStringLiteral("Standard PDF color chart should render symbols over colored cells."));
+            }
+
+            QImage wideChartImage(80, 20, QImage::Format_ARGB32);
+            wideChartImage.fill(redFill.rgba());
+            const PatternModel wideChartPattern = PatternModel::fromImage(wideChartImage);
+            if (!wideChartPattern.ok) {
+                return fail(QStringLiteral("Expected wide PDF layout pattern to build successfully."));
+            }
+
+            const QString wideChartPdfPath = QDir(tempDir.path()).filePath(QStringLiteral("wide-chart-layout.pdf"));
+            if (!wideChartPattern.writePdfFile(wideChartPdfPath, QStringLiteral("Wide Chart Layout Sprite"), 10, &pdfError)) {
+                return fail(QStringLiteral("Wide chart layout PDF write failed: ") + pdfError);
+            }
+
+            const QString wideChartPagePrefix = QDir(tempDir.path()).filePath(QStringLiteral("wide-chart-layout-page1"));
+            const int wideChartRasterExitCode = QProcess::execute(pdfToPpm, {
+                QStringLiteral("-f"),
+                QStringLiteral("1"),
+                QStringLiteral("-l"),
+                QStringLiteral("1"),
+                QStringLiteral("-singlefile"),
+                QStringLiteral("-png"),
+                QStringLiteral("-r"),
+                QStringLiteral("144"),
+                wideChartPdfPath,
+                wideChartPagePrefix
+            });
+            if (wideChartRasterExitCode != 0) {
+                return fail(QStringLiteral("pdftoppm could not rasterize the wide chart layout page."));
+            }
+
+            QImage wideChartPageImage;
+            if (!wideChartPageImage.load(wideChartPagePrefix + QStringLiteral(".png"), "PNG")) {
+                return fail(QStringLiteral("Could not load rasterized wide chart layout page."));
+            }
+            if (denseRedChartColumnCount(wideChartPageImage) < wideChartPageImage.width() * 65 / 100) {
+                return fail(QStringLiteral("Wide PDF chart layout should prioritize chart width when side legend would shrink cells."));
+            }
+
+            QImage tallChartImage(20, 80, QImage::Format_ARGB32);
+            tallChartImage.fill(redFill.rgba());
+            const PatternModel tallChartPattern = PatternModel::fromImage(tallChartImage);
+            if (!tallChartPattern.ok) {
+                return fail(QStringLiteral("Expected tall PDF margin pattern to build successfully."));
+            }
+
+            const QString tallChartPdfPath = QDir(tempDir.path()).filePath(QStringLiteral("tall-chart-margin.pdf"));
+            if (!tallChartPattern.writePdfFile(tallChartPdfPath, QStringLiteral("Tall Chart Margin Sprite"), 10, &pdfError)) {
+                return fail(QStringLiteral("Tall chart margin PDF write failed: ") + pdfError);
+            }
+
+            const QString tallChartPagePrefix = QDir(tempDir.path()).filePath(QStringLiteral("tall-chart-margin-page1"));
+            const int tallChartRasterExitCode = QProcess::execute(pdfToPpm, {
+                QStringLiteral("-f"),
+                QStringLiteral("1"),
+                QStringLiteral("-l"),
+                QStringLiteral("1"),
+                QStringLiteral("-singlefile"),
+                QStringLiteral("-png"),
+                QStringLiteral("-r"),
+                QStringLiteral("144"),
+                tallChartPdfPath,
+                tallChartPagePrefix
+            });
+            if (tallChartRasterExitCode != 0) {
+                return fail(QStringLiteral("pdftoppm could not rasterize the tall chart margin page."));
+            }
+
+            QImage tallChartPageImage;
+            if (!tallChartPageImage.load(tallChartPagePrefix + QStringLiteral(".png"), "PNG")) {
+                return fail(QStringLiteral("Could not load rasterized tall chart margin page."));
+            }
+            const int bottomChartMargin = bottomMarginBelowRedChartPixels(tallChartPageImage);
+            if (bottomChartMargin < 32) {
+                return fail(QStringLiteral("PDF chart pages should keep a clear bottom margin below the chart; got %1 px.")
+                    .arg(bottomChartMargin));
+            }
+        }
+
+        QImage gridNumberImage(21, 21, QImage::Format_ARGB32);
+        gridNumberImage.fill(redFill.rgba());
+        const PatternModel gridNumberPattern = PatternModel::fromImage(gridNumberImage);
+        if (!gridNumberPattern.ok) {
+            return fail(QStringLiteral("Expected grid-number PDF pattern to build successfully."));
+        }
+
+        const QString gridNumberPdfPath = QDir(tempDir.path()).filePath(QStringLiteral("grid-number-pattern.pdf"));
+        if (!gridNumberPattern.writePdfFile(gridNumberPdfPath, QStringLiteral("Grid Number Sprite"), 10, &pdfError)) {
+            return fail(QStringLiteral("Grid-number PDF write failed: ") + pdfError);
+        }
+
+        const QString gridNumberTextPath = QDir(tempDir.path()).filePath(QStringLiteral("grid-number-pattern.txt"));
+        const int gridNumberExitCode = QProcess::execute(pdfToText, {gridNumberPdfPath, gridNumberTextPath});
+        if (gridNumberExitCode != 0) {
+            return fail(QStringLiteral("pdftotext could not read the grid-number PDF."));
+        }
+        QFile gridNumberTextFile(gridNumberTextPath);
+        if (!gridNumberTextFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            return fail(QStringLiteral("Could not read generated grid-number PDF text."));
+        }
+        const QString gridNumberPdfText = QString::fromUtf8(gridNumberTextFile.readAll());
+        if (!gridNumberPdfText.contains(QStringLiteral("10")) ||
+            !gridNumberPdfText.contains(QStringLiteral("20"))) {
+            return fail(QStringLiteral("Pattern PDF charts should include 10-stitch grid number labels."));
         }
     }
 
