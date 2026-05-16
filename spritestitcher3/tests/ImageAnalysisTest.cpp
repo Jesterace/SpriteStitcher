@@ -688,6 +688,9 @@ int main(int argc, char *argv[]) {
         pdfBytes.contains("v2.9.5")) {
         return fail(QStringLiteral("Pattern PDF should not contain legacy debug/status text."));
     }
+    if (pdfBytes.contains("/Subtype /Image") || pdfBytes.contains("/Subtype/Image")) {
+        return fail(QStringLiteral("Pattern PDF charts should be drawn directly, not embedded as raster images."));
+    }
     const QString pdfToText = QStandardPaths::findExecutable(QStringLiteral("pdftotext"));
     if (!pdfToText.isEmpty()) {
         const QString pdfTextPath = QDir(tempDir.path()).filePath(QStringLiteral("pattern.txt"));
