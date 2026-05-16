@@ -902,6 +902,35 @@ int main(int argc, char *argv[]) {
         if (!tiledChartPdfText.contains(QStringLiteral("110"))) {
             return fail(QStringLiteral("Tiled PDF grid numbers should use absolute stitch coordinates."));
         }
+
+        PdfExportOptions tiledColorOptions;
+        tiledColorOptions.includePatternInfo = false;
+        tiledColorOptions.includeLegend = false;
+        tiledColorOptions.includeColorOverview = false;
+        tiledColorOptions.includeBlackAndWhiteSymbolChart = false;
+        tiledColorOptions.includeTiledColorChart = true;
+        tiledColorOptions.tileSize = 75;
+
+        const QString tiledColorPdfPath = QDir(tempDir.path()).filePath(QStringLiteral("tiled-color-chart-pattern.pdf"));
+        if (!tiledChartPattern.writePdfFile(tiledColorPdfPath, QStringLiteral("Tiled Color Chart Sprite"), 10, &pdfError, tiledColorOptions)) {
+            return fail(QStringLiteral("Tiled color chart PDF write failed: ") + pdfError);
+        }
+
+        const QString tiledColorTextPath = QDir(tempDir.path()).filePath(QStringLiteral("tiled-color-chart-pattern.txt"));
+        const int tiledColorExitCode = QProcess::execute(pdfToText, {tiledColorPdfPath, tiledColorTextPath});
+        if (tiledColorExitCode != 0) {
+            return fail(QStringLiteral("pdftotext could not read the tiled color chart PDF."));
+        }
+        QFile tiledColorTextFile(tiledColorTextPath);
+        if (!tiledColorTextFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            return fail(QStringLiteral("Could not read generated tiled color chart PDF text."));
+        }
+        const QString tiledColorPdfText = QString::fromUtf8(tiledColorTextFile.readAll());
+        if (!tiledColorPdfText.contains(QStringLiteral("Color Chart - Tile 4 of 9")) ||
+            !tiledColorPdfText.contains(QStringLiteral("Columns 1-75, Rows 76-150")) ||
+            tiledColorPdfText.contains(QStringLiteral("Black-and-White Symbol Chart"))) {
+            return fail(QStringLiteral("PDF export options should allow tiled color chart pages with the selected tile size."));
+        }
     }
 
     const PatternModel emptyPattern = PatternModel::fromImage(QImage());

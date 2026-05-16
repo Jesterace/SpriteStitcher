@@ -7,6 +7,7 @@
 #include <QColor>
 #include <QComboBox>
 #include <QDialog>
+#include <QDialogButtonBox>
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -59,6 +60,68 @@ QString withPdfSuffix(QString path) {
         path += QStringLiteral(".pdf");
     }
     return path;
+}
+
+bool editPdfExportOptions(QWidget *parent, PdfExportOptions *options) {
+    if (!options) {
+        return false;
+    }
+
+    QDialog dialog(parent);
+    dialog.setWindowTitle(QStringLiteral("PDF Export Options"));
+
+    auto *layout = new QVBoxLayout(&dialog);
+
+    auto *sectionsBox = new QGroupBox(QStringLiteral("Sections"), &dialog);
+    auto *sectionsLayout = new QVBoxLayout(sectionsBox);
+
+    auto *patternInfoCheck = new QCheckBox(QStringLiteral("Include pattern info / cover page"), sectionsBox);
+    auto *legendCheck = new QCheckBox(QStringLiteral("Include legend"), sectionsBox);
+    auto *colorOverviewCheck = new QCheckBox(QStringLiteral("Include color overview page"), sectionsBox);
+    auto *blackAndWhiteCheck = new QCheckBox(QStringLiteral("Include black-and-white symbol chart"), sectionsBox);
+    auto *tiledColorCheck = new QCheckBox(QStringLiteral("Include tiled color chart"), sectionsBox);
+
+    patternInfoCheck->setChecked(options->includePatternInfo);
+    legendCheck->setChecked(options->includeLegend);
+    colorOverviewCheck->setChecked(options->includeColorOverview);
+    blackAndWhiteCheck->setChecked(options->includeBlackAndWhiteSymbolChart);
+    tiledColorCheck->setChecked(options->includeTiledColorChart);
+
+    sectionsLayout->addWidget(patternInfoCheck);
+    sectionsLayout->addWidget(legendCheck);
+    sectionsLayout->addWidget(colorOverviewCheck);
+    sectionsLayout->addWidget(blackAndWhiteCheck);
+    sectionsLayout->addWidget(tiledColorCheck);
+    layout->addWidget(sectionsBox);
+
+    auto *tileForm = new QFormLayout;
+    auto *tileSizeCombo = new QComboBox(&dialog);
+    const int tileSizes[] = {50, 75, 100, 125};
+    for (const int tileSize : tileSizes) {
+        tileSizeCombo->addItem(QStringLiteral("%1 stitches").arg(tileSize), tileSize);
+    }
+    const int tileIndex = tileSizeCombo->findData(options->tileSize);
+    tileSizeCombo->setCurrentIndex(tileIndex >= 0 ? tileIndex : tileSizeCombo->findData(100));
+    tileForm->addRow(QStringLiteral("Tile size:"), tileSizeCombo);
+    layout->addLayout(tileForm);
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+
+    if (dialog.exec() != QDialog::Accepted) {
+        return false;
+    }
+
+    options->includePatternInfo = patternInfoCheck->isChecked();
+    options->includeLegend = legendCheck->isChecked();
+    options->includeColorOverview = colorOverviewCheck->isChecked();
+    options->includeBlackAndWhiteSymbolChart = blackAndWhiteCheck->isChecked();
+    options->includeTiledColorChart = tiledColorCheck->isChecked();
+    options->tileSize = tileSizeCombo->currentData().toInt();
+
+    return true;
 }
 }
 
@@ -325,6 +388,11 @@ void MainWindow::exportPdf() {
         defaultFileName = info.completeBaseName() + QStringLiteral(".pdf");
     }
 
+    PdfExportOptions pdfOptions;
+    if (!editPdfExportOptions(this, &pdfOptions)) {
+        return;
+    }
+
     QFileDialog dialog(
         this,
         QStringLiteral("Export PDF"),
@@ -365,7 +433,7 @@ void MainWindow::exportPdf() {
     };
 
     QString error;
-    if (!m_patternModel.writePdfFile(path, imageName, currentChartCellSize(), &error, progressCallback)) {
+    if (!m_patternModel.writePdfFile(path, imageName, currentChartCellSize(), &error, pdfOptions, progressCallback)) {
         m_exportPdfButton->setEnabled(true);
         progress.close();
         if (progress.wasCanceled() || error == QStringLiteral("PDF export canceled.")) {

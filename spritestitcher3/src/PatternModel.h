@@ -41,6 +41,15 @@ enum class ChartMode {
     ColorsOnly
 };
 
+struct PdfExportOptions {
+    bool includePatternInfo = true;
+    bool includeLegend = true;
+    bool includeColorOverview = true;
+    bool includeBlackAndWhiteSymbolChart = true;
+    bool includeTiledColorChart = false;
+    int tileSize = 100;
+};
+
 using PdfProgressCallback = std::function<bool(int current, int maximum, const QString &statusText)>;
 
 class PatternModel {
@@ -70,7 +79,12 @@ public:
     QString finishedSizeText(int fabricCount) const;
     QImage renderChartPreview(int cellSize = 16, bool drawCenterLines = true, ChartMode chartMode = ChartMode::ColorAndSymbols) const;
     bool writeChartPngFile(const QString &path, int cellSize = 16, QString *errorMessage = nullptr, ChartMode chartMode = ChartMode::ColorAndSymbols) const;
-    bool writePdfFile(const QString &path, const QString &imageName, int chartCellSize = 16, QString *errorMessage = nullptr, const PdfProgressCallback &progressCallback = PdfProgressCallback()) const;
+    bool writePdfFile(const QString &path,
+                      const QString &imageName,
+                      int chartCellSize = 16,
+                      QString *errorMessage = nullptr,
+                      const PdfExportOptions &options = PdfExportOptions(),
+                      const PdfProgressCallback &progressCallback = PdfProgressCallback()) const;
     QString toCsv() const;
     bool writeCsvFile(const QString &path, QString *errorMessage = nullptr) const;
 
