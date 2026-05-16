@@ -313,6 +313,26 @@ void MainWindow::exportPdf() {
         return;
     }
 
+    const qint64 stitchArea = static_cast<qint64>(m_patternModel.imageWidth) * static_cast<qint64>(m_patternModel.imageHeight);
+    const qint64 largePatternLimit = 12000;
+
+    if (stitchArea > largePatternLimit) {
+        QMessageBox::warning(
+            this,
+            QStringLiteral("Export PDF"),
+            QStringLiteral(
+                "This pattern is too large for the current PDF exporter.\n\n"
+                "Pattern size: %1 x %2 stitches\n"
+                "Total grid area: %3 stitches\n\n"
+                "Large tiled PDF export is the next feature we need to add. "
+                "For now, PDF export is limited to %4 stitches so the app does not lock up.")
+                .arg(m_patternModel.imageWidth)
+                .arg(m_patternModel.imageHeight)
+                .arg(stitchArea)
+                .arg(largePatternLimit));
+        return;
+    }
+
     QString defaultDirectory;
     QString defaultFileName = QStringLiteral("spritestitcher3_pattern.pdf");
     QString imageName = QStringLiteral("Untitled Sprite");
