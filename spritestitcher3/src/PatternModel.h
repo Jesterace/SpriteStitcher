@@ -8,6 +8,7 @@
 #include <QString>
 #include <QStringList>
 #include <QVector>
+#include <functional>
 
 struct PatternSpriteColor {
     QRgb rgba = 0;
@@ -40,6 +41,8 @@ enum class ChartMode {
     ColorsOnly
 };
 
+using PdfProgressCallback = std::function<bool(int current, int maximum, const QString &statusText)>;
+
 class PatternModel {
 public:
     bool ok = false;
@@ -67,7 +70,7 @@ public:
     QString finishedSizeText(int fabricCount) const;
     QImage renderChartPreview(int cellSize = 16, bool drawCenterLines = true, ChartMode chartMode = ChartMode::ColorAndSymbols) const;
     bool writeChartPngFile(const QString &path, int cellSize = 16, QString *errorMessage = nullptr, ChartMode chartMode = ChartMode::ColorAndSymbols) const;
-    bool writePdfFile(const QString &path, const QString &imageName, int chartCellSize = 16, QString *errorMessage = nullptr) const;
+    bool writePdfFile(const QString &path, const QString &imageName, int chartCellSize = 16, QString *errorMessage = nullptr, const PdfProgressCallback &progressCallback = PdfProgressCallback()) const;
     QString toCsv() const;
     bool writeCsvFile(const QString &path, QString *errorMessage = nullptr) const;
 

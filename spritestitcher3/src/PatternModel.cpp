@@ -92,7 +92,7 @@ void drawCenteredSymbol(QPainter &painter, const QRectF &rect, const QString &sy
         painter.setBrush(backingColor);
         painter.setPen(Qt::NoPen);
 
-        const qreal dotSize = std::min(rect.width(), rect.height()) * 0.74;
+        const qreal dotSize = std::min(rect.width(), rect.height()) * 0.56;
         const QRectF dotRect(
             rect.center().x() - dotSize / 2.0,
             rect.center().y() - dotSize / 2.0,
@@ -103,9 +103,22 @@ void drawCenteredSymbol(QPainter &painter, const QRectF &rect, const QString &sy
     }
 
     painter.setFont(font);
-    painter.setPen(textColor);
     painter.setRenderHint(QPainter::TextAntialiasing, true);
-    painter.drawText(rect, Qt::AlignCenter, symbol);
+
+    const QRectF textBounds = metrics.boundingRect(symbol);
+    const QPointF textPos(
+        rect.left() + (rect.width() - textBounds.width()) / 2 - textBounds.left(),
+        rect.top() + (rect.height() - textBounds.height()) / 2 - textBounds.top());
+    QPainterPath path;
+    path.addText(textPos, font, symbol);
+
+    if (chartMode == ChartMode::ColorAndSymbols) {
+        QPen outlinePen(textColor == QColor(Qt::white) ? QColor(Qt::black) : QColor(Qt::white));
+        outlinePen.setWidthF(std::max<qreal>(0.75, rect.width() * 0.035));
+        outlinePen.setJoinStyle(Qt::RoundJoin);
+        painter.strokePath(path, outlinePen);
+    }
+    painter.fillPath(path, textColor);
 
     painter.restore();
 }
@@ -118,8 +131,38 @@ QColor chartCellFill(const PatternModel &model, const PatternSpriteColor &sprite
     return drawColors ? matchedFill : QColor(250, 250, 250);
 }
 
-void drawChartDirect(QPainter &painter, const PatternModel &model, const QRectF &chartRect, bool drawCenterLines, ChartMode chartMode) {
-    if (chartRect.isEmpty() || model.imageWidth <= 0 || model.imageHeight <= 0) {
+struct ChartTile {
+    int startX = 0;
+    int startY = 0;
+    int width = 0;
+    int height = 0;
+    int column = 0;
+    int row = 0;
+    int columnCount = 0;
+    int rowCount = 0;
+    int index = 0;
+    int count = 0;
+};
+
+QString chartTileRangeText(const ChartTile &tile) {
+    return QStringLiteral("Columns %1-%2, Rows %3-%4")
+        .arg(tile.startX + 1)
+        .arg(tile.startX + tile.width)
+        .arg(tile.startY + 1)
+        .arg(tile.startY + tile.height);
+}
+
+void drawChartDirect(QPainter &painter,
+                     const PatternModel &model,
+                     const QRectF &chartRect,
+                     int startX,
+                     int startY,
+                     int tileWidth,
+                     int tileHeight,
+                     bool drawCenterLines,
+                     ChartMode chartMode) {
+    if (chartRect.isEmpty() || model.imageWidth <= 0 || model.imageHeight <= 0 ||
+        tileWidth <= 0 || tileHeight <= 0) {
         return;
     }
 
@@ -130,13 +173,15 @@ void drawChartDirect(QPainter &painter, const PatternModel &model, const QRectF 
 
     const bool drawColors = chartMode == ChartMode::ColorAndSymbols || chartMode == ChartMode::ColorsOnly;
     const bool drawSymbols = chartMode == ChartMode::ColorAndSymbols || chartMode == ChartMode::SymbolsOnly;
-    const qreal cellWidth = chartRect.width() / model.imageWidth;
-    const qreal cellHeight = chartRect.height() / model.imageHeight;
+    const qreal cellWidth = chartRect.width() / tileWidth;
+    const qreal cellHeight = chartRect.height() / tileHeight;
     const qreal cellSide = std::min(cellWidth, cellHeight);
 
     painter.fillRect(chartRect, Qt::white);
-    for (int y = 0; y < model.imageHeight; ++y) {
-        for (int x = 0; x < model.imageWidth; ++x) {
+    for (int tileY = 0; tileY < tileHeight; ++tileY) {
+        const int y = startY + tileY;
+        for (int tileX = 0; tileX < tileWidth; ++tileX) {
+            const int x = startX + tileX;
             const int index = y * model.imageWidth + x;
             const int spriteIndex = index < model.stitchGrid.size() ? model.stitchGrid[index] : -1;
             if (spriteIndex < 0 || spriteIndex >= model.spriteColors.size()) {
@@ -144,8 +189,8 @@ void drawChartDirect(QPainter &painter, const PatternModel &model, const QRectF 
             }
 
             const QRectF cell(
-                chartRect.left() + x * cellWidth,
-                chartRect.top() + y * cellHeight,
+                chartRect.left() + tileX * cellWidth,
+                chartRect.top() + tileY * cellHeight,
                 cellWidth,
                 cellHeight);
             painter.fillRect(cell, chartCellFill(model, model.spriteColors[spriteIndex], drawColors));
@@ -153,18 +198,20 @@ void drawChartDirect(QPainter &painter, const PatternModel &model, const QRectF 
     }
 
     const qreal gridLineWidth = std::max<qreal>(0.5, cellSide * 0.025);
-    for (int x = 0; x <= model.imageWidth; ++x) {
-        QPen pen((x % 10 == 0) ? QColor(120, 120, 120) : QColor(210, 210, 210));
+    for (int tileX = 0; tileX <= tileWidth; ++tileX) {
+        const int absoluteX = startX + tileX;
+        QPen pen((absoluteX % 10 == 0) ? QColor(120, 120, 120) : QColor(210, 210, 210));
         pen.setWidthF(gridLineWidth);
         painter.setPen(pen);
-        const qreal px = chartRect.left() + x * cellWidth;
+        const qreal px = chartRect.left() + tileX * cellWidth;
         painter.drawLine(QPointF(px, chartRect.top()), QPointF(px, chartRect.bottom()));
     }
-    for (int y = 0; y <= model.imageHeight; ++y) {
-        QPen pen((y % 10 == 0) ? QColor(120, 120, 120) : QColor(210, 210, 210));
+    for (int tileY = 0; tileY <= tileHeight; ++tileY) {
+        const int absoluteY = startY + tileY;
+        QPen pen((absoluteY % 10 == 0) ? QColor(120, 120, 120) : QColor(210, 210, 210));
         pen.setWidthF(gridLineWidth);
         painter.setPen(pen);
-        const qreal py = chartRect.top() + y * cellHeight;
+        const qreal py = chartRect.top() + tileY * cellHeight;
         painter.drawLine(QPointF(chartRect.left(), py), QPointF(chartRect.right(), py));
     }
 
@@ -172,15 +219,23 @@ void drawChartDirect(QPainter &painter, const PatternModel &model, const QRectF 
         QPen centerPen(QColor(210, 0, 0));
         centerPen.setWidthF(std::max<qreal>(1.0, cellSide * 0.05));
         painter.setPen(centerPen);
-        const qreal centerX = chartRect.left() + (model.imageWidth / 2) * cellWidth;
-        const qreal centerY = chartRect.top() + (model.imageHeight / 2) * cellHeight;
-        painter.drawLine(QPointF(centerX, chartRect.top()), QPointF(centerX, chartRect.bottom()));
-        painter.drawLine(QPointF(chartRect.left(), centerY), QPointF(chartRect.right(), centerY));
+        const int centerXBoundary = model.imageWidth / 2;
+        const int centerYBoundary = model.imageHeight / 2;
+        if (centerXBoundary >= startX && centerXBoundary <= startX + tileWidth) {
+            const qreal centerX = chartRect.left() + (centerXBoundary - startX) * cellWidth;
+            painter.drawLine(QPointF(centerX, chartRect.top()), QPointF(centerX, chartRect.bottom()));
+        }
+        if (centerYBoundary >= startY && centerYBoundary <= startY + tileHeight) {
+            const qreal centerY = chartRect.top() + (centerYBoundary - startY) * cellHeight;
+            painter.drawLine(QPointF(chartRect.left(), centerY), QPointF(chartRect.right(), centerY));
+        }
     }
 
     if (drawSymbols) {
-        for (int y = 0; y < model.imageHeight; ++y) {
-            for (int x = 0; x < model.imageWidth; ++x) {
+        for (int tileY = 0; tileY < tileHeight; ++tileY) {
+            const int y = startY + tileY;
+            for (int tileX = 0; tileX < tileWidth; ++tileX) {
+                const int x = startX + tileX;
                 const int index = y * model.imageWidth + x;
                 const int spriteIndex = index < model.stitchGrid.size() ? model.stitchGrid[index] : -1;
                 if (spriteIndex < 0 || spriteIndex >= model.spriteColors.size()) {
@@ -193,8 +248,8 @@ void drawChartDirect(QPainter &painter, const PatternModel &model, const QRectF 
                     ? model.matchedColors[matchedIndex].symbol
                     : QString();
                 const QRectF cell(
-                    chartRect.left() + x * cellWidth,
-                    chartRect.top() + y * cellHeight,
+                    chartRect.left() + tileX * cellWidth,
+                    chartRect.top() + tileY * cellHeight,
                     cellWidth,
                     cellHeight);
                 drawCenteredSymbol(painter, cell, symbol, chartCellFill(model, sprite, drawColors), chartMode);
@@ -498,7 +553,7 @@ bool PatternModel::writeChartPngFile(const QString &path, int cellSize, QString 
     return true;
 }
 
-bool PatternModel::writePdfFile(const QString &path, const QString &imageName, int chartCellSize, QString *errorMessage) const {
+bool PatternModel::writePdfFile(const QString &path, const QString &imageName, int chartCellSize, QString *errorMessage, const PdfProgressCallback &progressCallback) const {
     const int pdfChartCellSize = std::max(chartCellSize, 40);
     if (!ok || imageWidth <= 0 || imageHeight <= 0) {
         if (errorMessage) {
@@ -508,10 +563,6 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
         }
         return false;
     }
-    const QSizeF chartSourceSize(
-        static_cast<qreal>(imageWidth) * pdfChartCellSize,
-        static_cast<qreal>(imageHeight) * pdfChartCellSize);
-
     const int dpi = 300;
     QPdfWriter writer(path);
     writer.setResolution(dpi);
@@ -548,11 +599,39 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
     const int chartBottomInset = pointsToPixels(18, dpi);
     const int legendBottomPadding = pointsToPixels(24, dpi);
     int y = content.top();
+    int progressValue = 0;
+    int progressMaximum = 1;
 
-    auto scaledChartSize = [&](int maxWidth, int maxHeight) {
+    auto cancelPdfExport = [&]() {
+        if (errorMessage) {
+            *errorMessage = QStringLiteral("PDF export canceled.");
+        }
+        return false;
+    };
+
+    auto reportProgress = [&](const QString &statusText) {
+        if (!progressCallback) {
+            return true;
+        }
+        progressValue = std::min(progressValue + 1, progressMaximum);
+        if (!progressCallback(progressValue, progressMaximum, statusText)) {
+            return cancelPdfExport();
+        }
+        return true;
+    };
+
+    if (progressCallback && !progressCallback(0, progressMaximum, QStringLiteral("Preparing PDF export..."))) {
+        painter.end();
+        cancelPdfExport();
+        return false;
+    }
+
+    auto scaledChartSize = [&](int stitchWidth, int stitchHeight, int maxWidth, int maxHeight) {
         const qreal availableWidth = std::max(1, maxWidth);
         const qreal availableHeight = std::max(1, maxHeight);
-        QSizeF size = chartSourceSize;
+        QSizeF size(
+            static_cast<qreal>(stitchWidth) * pdfChartCellSize,
+            static_cast<qreal>(stitchHeight) * pdfChartCellSize);
         size.scale(availableWidth, availableHeight, Qt::KeepAspectRatio);
         return size;
     };
@@ -637,12 +716,50 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
         return summaryRect.bottom() + gap;
     };
 
-    y = drawPdfHeader(content.top());
+    auto drawCoverPage = [&]() {
+        const int nextY = drawPdfHeader(content.top());
+
+        QFont coverTitleFont = painter.font();
+        coverTitleFont.setBold(true);
+        coverTitleFont.setPointSize(14);
+        QFont coverBodyFont = painter.font();
+        coverBodyFont.setBold(false);
+        coverBodyFont.setPointSize(10);
+
+        painter.setFont(coverTitleFont);
+        painter.setPen(Qt::black);
+        const int titleHeight = QFontMetrics(coverTitleFont).height();
+        painter.drawText(QRect(content.left(), nextY, content.width(), titleHeight),
+                         Qt::AlignLeft | Qt::AlignVCenter,
+                         QStringLiteral("Pattern Info"));
+
+        painter.setFont(coverBodyFont);
+        const int bodyHeight = QFontMetrics(coverBodyFont).height();
+        const int lineGap = pointsToPixels(3, dpi);
+        int infoY = nextY + titleHeight + smallGap;
+        const QStringList infoLines{
+            QStringLiteral("Large-pattern PDF export uses 100 x 100 stitch black-and-white symbol chart tiles."),
+            QStringLiteral("Grid numbers on tiled chart pages use absolute pattern coordinates."),
+            QStringLiteral("The color chart is included as a full-pattern overview when it fits on one page.")
+        };
+
+        for (const QString &line : infoLines) {
+            painter.drawText(QRect(content.left(), infoY, content.width(), bodyHeight),
+                             Qt::AlignLeft | Qt::AlignVCenter,
+                             line);
+            infoY += bodyHeight + lineGap;
+        }
+    };
 
     QFont chartTitleFont = painter.font();
     chartTitleFont.setBold(true);
     chartTitleFont.setPointSize(12);
     const int chartTitleHeight = QFontMetrics(chartTitleFont).height();
+    const int chartTitleLineGap = pointsToPixels(2, dpi);
+
+    auto chartTitleBlockHeight = [&](int lineCount) {
+        return lineCount * chartTitleHeight + std::max(0, lineCount - 1) * chartTitleLineGap;
+    };
 
     QFont gridNumberFont = painter.font();
     gridNumberFont.setBold(false);
@@ -688,7 +805,13 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
         return area.adjusted(chartHorizontalInset, chartTopInset, -chartHorizontalInset, -chartBottomInset);
     };
 
-    auto drawChartSection = [&](const QString &heading, ChartMode chartMode, const QRect &area) {
+    auto drawChartSection = [&](const QStringList &headingLines,
+                                ChartMode chartMode,
+                                const QRect &area,
+                                int startX,
+                                int startY,
+                                int stitchWidth,
+                                int stitchHeight) {
         const QRect sectionArea = chartSectionArea(area);
         if (sectionArea.isEmpty()) {
             return;
@@ -696,33 +819,41 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
 
         painter.setFont(chartTitleFont);
         painter.setPen(Qt::black);
-        painter.drawText(QRect(sectionArea.left(), sectionArea.top(), sectionArea.width(), chartTitleHeight),
-                         Qt::AlignLeft | Qt::AlignVCenter,
-                         heading);
+        int titleY = sectionArea.top();
+        for (const QString &headingLine : headingLines) {
+            painter.drawText(QRect(sectionArea.left(), titleY, sectionArea.width(), chartTitleHeight),
+                             Qt::AlignLeft | Qt::AlignVCenter,
+                             headingLine);
+            titleY += chartTitleHeight + chartTitleLineGap;
+        }
 
-        const bool drawTopNumbers = imageWidth >= 10;
-        const bool drawLeftNumbers = imageHeight >= 10;
+        const int endX = startX + stitchWidth;
+        const int endY = startY + stitchHeight;
+        const int firstTopMarker = ((startX / 10) + 1) * 10;
+        const int firstLeftMarker = ((startY / 10) + 1) * 10;
+        const bool drawTopNumbers = firstTopMarker <= endX;
+        const bool drawLeftNumbers = firstLeftMarker <= endY;
         const int topNumberMargin = drawTopNumbers ? gridNumberHeight + gridNumberPadding : 0;
         const int leftNumberMargin = drawLeftNumbers ? maxGridNumberWidth + gridNumberPadding : 0;
         const int chartLeft = sectionArea.left() + leftNumberMargin;
-        const int chartTop = sectionArea.top() + chartTitleHeight + smallGap + topNumberMargin;
+        const int chartTop = sectionArea.top() + chartTitleBlockHeight(headingLines.size()) + smallGap + topNumberMargin;
         const int chartMaxWidth = sectionArea.right() - chartLeft + 1;
         const int chartMaxHeight = sectionArea.bottom() - chartTop + 1;
         if (chartMaxWidth <= 0 || chartMaxHeight <= 0) {
             return;
         }
 
-        const QSizeF targetSize = scaledChartSize(chartMaxWidth, chartMaxHeight);
+        const QSizeF targetSize = scaledChartSize(stitchWidth, stitchHeight, chartMaxWidth, chartMaxHeight);
         const QRectF chartRect(chartLeft, chartTop, targetSize.width(), targetSize.height());
-        drawChartDirect(painter, *this, chartRect, true, chartMode);
+        drawChartDirect(painter, *this, chartRect, startX, startY, stitchWidth, stitchHeight, true, chartMode);
 
         painter.setFont(gridNumberFont);
         painter.setPen(QColor(70, 70, 70));
         if (drawTopNumbers) {
-            for (int marker = 10; marker <= imageWidth; marker += 10) {
+            for (int marker = firstTopMarker; marker <= endX; marker += 10) {
                 const QString label = QString::number(marker);
                 const int labelWidth = std::max(maxGridNumberWidth, gridNumberMetrics.horizontalAdvance(label));
-                const int centerX = static_cast<int>(std::round(chartRect.left() + static_cast<double>(marker) / imageWidth * chartRect.width()));
+                const int centerX = static_cast<int>(std::round(chartRect.left() + static_cast<double>(marker - startX) / stitchWidth * chartRect.width()));
                 const int labelLeft = std::clamp(
                     centerX - labelWidth / 2,
                     static_cast<int>(std::round(chartRect.left())),
@@ -734,9 +865,9 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
             }
         }
         if (drawLeftNumbers) {
-            for (int marker = 10; marker <= imageHeight; marker += 10) {
+            for (int marker = firstLeftMarker; marker <= endY; marker += 10) {
                 const QString label = QString::number(marker);
-                const int centerY = static_cast<int>(std::round(chartRect.top() + static_cast<double>(marker) / imageHeight * chartRect.height()));
+                const int centerY = static_cast<int>(std::round(chartRect.top() + static_cast<double>(marker - startY) / stitchHeight * chartRect.height()));
                 const int labelTop = std::clamp(
                     centerY - gridNumberHeight / 2,
                     static_cast<int>(std::round(chartRect.top())),
@@ -907,40 +1038,48 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
         return legendRowCapacity(tableArea) >= matchedColors.size();
     };
 
-    auto chartTargetSizeForArea = [&](const QRect &area) {
+    auto chartTargetSizeForArea = [&](const QRect &area, int titleLineCount, int stitchWidth, int stitchHeight) {
         const QRect sectionArea = chartSectionArea(area);
         if (sectionArea.isEmpty()) {
             return QSizeF();
         }
 
-        const bool drawTopNumbers = imageWidth >= 10;
-        const bool drawLeftNumbers = imageHeight >= 10;
+        const int firstTopMarker = 10;
+        const int firstLeftMarker = 10;
+        const bool drawTopNumbers = firstTopMarker <= stitchWidth;
+        const bool drawLeftNumbers = firstLeftMarker <= stitchHeight;
         const int topNumberMargin = drawTopNumbers ? gridNumberHeight + gridNumberPadding : 0;
         const int leftNumberMargin = drawLeftNumbers ? maxGridNumberWidth + gridNumberPadding : 0;
         const int chartLeft = sectionArea.left() + leftNumberMargin;
-        const int chartTop = sectionArea.top() + chartTitleHeight + smallGap + topNumberMargin;
+        const int chartTop = sectionArea.top() + chartTitleBlockHeight(titleLineCount) + smallGap + topNumberMargin;
         const int chartMaxWidth = sectionArea.right() - chartLeft + 1;
         const int chartMaxHeight = sectionArea.bottom() - chartTop + 1;
         if (chartMaxWidth <= 0 || chartMaxHeight <= 0) {
             return QSizeF();
         }
-        return scaledChartSize(chartMaxWidth, chartMaxHeight);
+        return scaledChartSize(stitchWidth, stitchHeight, chartMaxWidth, chartMaxHeight);
     };
 
-    auto effectiveCellSize = [&](const QRect &area) {
-        const QSizeF targetSize = chartTargetSizeForArea(area);
-        if (targetSize.isEmpty() || imageWidth <= 0 || imageHeight <= 0) {
+    auto effectiveCellSize = [&](const QRect &area, int titleLineCount, int stitchWidth, int stitchHeight) {
+        const QSizeF targetSize = chartTargetSizeForArea(area, titleLineCount, stitchWidth, stitchHeight);
+        if (targetSize.isEmpty() || stitchWidth <= 0 || stitchHeight <= 0) {
             return 0.0;
         }
         return std::min(
-            static_cast<double>(targetSize.width()) / imageWidth,
-            static_cast<double>(targetSize.height()) / imageHeight);
+            static_cast<double>(targetSize.width()) / stitchWidth,
+            static_cast<double>(targetSize.height()) / stitchHeight);
     };
 
     auto drawLegendPages = [&](int startIndex, bool continued) {
         int legendIndex = startIndex;
         bool drewPage = false;
         while (legendIndex < matchedColors.size() || !drewPage) {
+            const QString statusText = (continued || legendIndex > startIndex)
+                ? QStringLiteral("Drawing legend (continued)...")
+                : QStringLiteral("Drawing legend...");
+            if (!reportProgress(statusText)) {
+                return false;
+            }
             const QRect legendArea(content.left(), content.top(), content.width(), std::max(1, content.height() - legendBottomPadding));
             const int nextLegendIndex = drawLegendRows(legendArea, legendIndex, continued || legendIndex > startIndex);
             drewPage = true;
@@ -968,6 +1107,7 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
     const int fullLegendHeight = legendTitleHeight + smallGap + rowHeight * (matchedColors.size() + 1);
 
     auto drawChartWithBestLegend = [&](const QString &heading, ChartMode chartMode, int pageTop, double minReadableCell) {
+        const QStringList headingLines{heading};
         const QRect pageArea(content.left(), pageTop, content.width(), std::max(1, contentBottom - pageTop - legendBottomPadding));
         const int maxSideLegendWidth = pageArea.width() - gap - minChartWidth;
 
@@ -977,8 +1117,8 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
             const QRect chartArea(pageArea.left(), pageArea.top(), chartWidth, pageArea.height());
             const QRect legendArea(chartArea.right() + 1 + gap, pageArea.top(), sideLegendWidth, pageArea.height());
 
-            if (effectiveCellSize(chartArea) >= minReadableCell && legendFits(legendArea)) {
-                drawChartSection(heading, chartMode, chartArea);
+            if (effectiveCellSize(chartArea, headingLines.size(), imageWidth, imageHeight) >= minReadableCell && legendFits(legendArea)) {
+                drawChartSection(headingLines, chartMode, chartArea, 0, 0, imageWidth, imageHeight);
                 drawLegendRows(legendArea, 0, false);
                 return true;
             }
@@ -989,23 +1129,134 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
             const QRect chartArea(pageArea.left(), pageArea.top(), pageArea.width(), chartHeight);
             const QRect legendArea(pageArea.left(), chartArea.bottom() + 1 + gap, pageArea.width(), fullLegendHeight);
 
-            if (effectiveCellSize(chartArea) >= minReadableCell && legendFits(legendArea)) {
-                drawChartSection(heading, chartMode, chartArea);
+            if (effectiveCellSize(chartArea, headingLines.size(), imageWidth, imageHeight) >= minReadableCell && legendFits(legendArea)) {
+                drawChartSection(headingLines, chartMode, chartArea, 0, 0, imageWidth, imageHeight);
                 drawLegendRows(legendArea, 0, false);
                 return true;
             }
         }
 
-        drawChartSection(heading, chartMode, pageArea);
+        drawChartSection(headingLines, chartMode, pageArea, 0, 0, imageWidth, imageHeight);
         if (!newPage()) {
             return false;
         }
         return drawLegendPages(0, false);
     };
 
-    if (!drawChartWithBestLegend(QStringLiteral("Color Chart"), ChartMode::ColorAndSymbols, y, chartMinReadableCell)) {
-        painter.end();
-        return false;
+    auto chartTiles = [&]() {
+        const int tileSize = 100;
+        const int columnCount = (imageWidth + tileSize - 1) / tileSize;
+        const int rowCount = (imageHeight + tileSize - 1) / tileSize;
+        QVector<ChartTile> tiles;
+        tiles.reserve(columnCount * rowCount);
+        int tileIndex = 0;
+
+        for (int row = 0; row < rowCount; ++row) {
+            for (int column = 0; column < columnCount; ++column) {
+                const int startX = column * tileSize;
+                const int startY = row * tileSize;
+                ChartTile tile;
+                tile.startX = startX;
+                tile.startY = startY;
+                tile.width = std::min(tileSize, imageWidth - startX);
+                tile.height = std::min(tileSize, imageHeight - startY);
+                tile.column = column;
+                tile.row = row;
+                tile.columnCount = columnCount;
+                tile.rowCount = rowCount;
+                tile.index = tileIndex++;
+                tile.count = columnCount * rowCount;
+                tiles.push_back(tile);
+            }
+        }
+
+        return tiles;
+    };
+
+    const QVector<ChartTile> tiles = chartTiles();
+
+    auto drawTiledChart = [&](const QString &heading, ChartMode chartMode) {
+        const QRect pageArea(content.left(), content.top(), content.width(), std::max(1, content.height() - legendBottomPadding));
+
+        for (int i = 0; i < tiles.size(); ++i) {
+            if (i > 0 && !newPage()) {
+                return false;
+            }
+
+            const ChartTile &tile = tiles[i];
+            if (!reportProgress(QStringLiteral("Drawing %1 tile %2 of %3...")
+                    .arg(heading)
+                    .arg(tile.index + 1)
+                    .arg(tile.count))) {
+                return false;
+            }
+
+            const QString tileHeading = QStringLiteral("%1 - Tile %2 of %3")
+                .arg(heading)
+                .arg(tile.index + 1)
+                .arg(tile.count);
+            const QString rangeText = chartTileRangeText(tile);
+            const QString fullHeading = QStringLiteral("%1 - %2").arg(tileHeading, rangeText);
+            const int headingWidth = QFontMetrics(chartTitleFont).horizontalAdvance(fullHeading);
+            const int headingMaxWidth = std::max(1, pageArea.width() - chartHorizontalInset * 2);
+            const QStringList headingLines = headingWidth <= headingMaxWidth
+                ? QStringList{fullHeading}
+                : QStringList{tileHeading, rangeText};
+            drawChartSection(headingLines, chartMode, pageArea, tile.startX, tile.startY, tile.width, tile.height);
+        }
+        return true;
+    };
+
+    auto drawFullPageChart = [&](const QString &heading, ChartMode chartMode) {
+        const QRect pageArea(content.left(), content.top(), content.width(), std::max(1, content.height() - legendBottomPadding));
+        drawChartSection(QStringList{heading}, chartMode, pageArea, 0, 0, imageWidth, imageHeight);
+    };
+
+    const QRect fullChartPageArea(content.left(), content.top(), content.width(), std::max(1, content.height() - legendBottomPadding));
+    const bool useTiledCharts = imageWidth > 100 || imageHeight > 100;
+    const double overviewMinCell = pointsToPixels(1.5, dpi);
+    const bool drawColorOverview = effectiveCellSize(fullChartPageArea, 1, imageWidth, imageHeight) >= overviewMinCell;
+    progressMaximum = useTiledCharts
+        ? std::max(1, static_cast<int>(tiles.size()) + (drawColorOverview ? 4 : 3))
+        : 4;
+
+    if (useTiledCharts) {
+        if (!reportProgress(QStringLiteral("Drawing cover page..."))) {
+            painter.end();
+            return false;
+        }
+        drawCoverPage();
+
+        if (!newPage()) {
+            painter.end();
+            return false;
+        }
+        if (!drawLegendPages(0, false)) {
+            painter.end();
+            return false;
+        }
+
+        if (drawColorOverview) {
+            if (!newPage()) {
+                painter.end();
+                return false;
+            }
+            if (!reportProgress(QStringLiteral("Drawing color overview..."))) {
+                painter.end();
+                return false;
+            }
+            drawFullPageChart(QStringLiteral("Color Overview"), ChartMode::ColorsOnly);
+        }
+    } else {
+        y = drawPdfHeader(content.top());
+        if (!reportProgress(QStringLiteral("Drawing color chart..."))) {
+            painter.end();
+            return false;
+        }
+        if (!drawChartWithBestLegend(QStringLiteral("Color Chart"), ChartMode::ColorAndSymbols, y, chartMinReadableCell)) {
+            painter.end();
+            return false;
+        }
     }
 
     if (!newPage()) {
@@ -1013,10 +1264,26 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
         return false;
     }
 
-    y = drawPdfHeader(content.top());
+    if (useTiledCharts) {
+        if (!drawTiledChart(QStringLiteral("Black-and-White Symbol Chart"), ChartMode::SymbolsOnly)) {
+            painter.end();
+            return false;
+        }
+    } else {
+        y = drawPdfHeader(content.top());
+        if (!reportProgress(QStringLiteral("Drawing black-and-white symbol chart..."))) {
+            painter.end();
+            return false;
+        }
+        if (!drawChartWithBestLegend(QStringLiteral("Black-and-White Symbol Chart"), ChartMode::SymbolsOnly, y, chartMinReadableCell)) {
+            painter.end();
+            return false;
+        }
+    }
 
-    if (!drawChartWithBestLegend(QStringLiteral("Black-and-White Symbol Chart"), ChartMode::SymbolsOnly, y, chartMinReadableCell)) {
+    if (progressCallback && !progressCallback(progressMaximum, progressMaximum, QStringLiteral("PDF export complete."))) {
         painter.end();
+        cancelPdfExport();
         return false;
     }
 

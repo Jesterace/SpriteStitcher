@@ -856,6 +856,52 @@ int main(int argc, char *argv[]) {
             !gridNumberPdfText.contains(QStringLiteral("20"))) {
             return fail(QStringLiteral("Pattern PDF charts should include 10-stitch grid number labels."));
         }
+
+        QImage tiledChartImage(201, 201, QImage::Format_ARGB32);
+        tiledChartImage.fill(redFill.rgba());
+        const PatternModel tiledChartPattern = PatternModel::fromImage(tiledChartImage);
+        if (!tiledChartPattern.ok) {
+            return fail(QStringLiteral("Expected tiled PDF pattern to build successfully."));
+        }
+
+        const QString tiledChartPdfPath = QDir(tempDir.path()).filePath(QStringLiteral("tiled-chart-pattern.pdf"));
+        if (!tiledChartPattern.writePdfFile(tiledChartPdfPath, QStringLiteral("Tiled Chart Sprite"), 10, &pdfError)) {
+            return fail(QStringLiteral("Tiled chart PDF write failed: ") + pdfError);
+        }
+
+        QFile tiledChartPdfFile(tiledChartPdfPath);
+        if (!tiledChartPdfFile.open(QIODevice::ReadOnly)) {
+            return fail(QStringLiteral("Tiled chart PDF file could not be reopened."));
+        }
+        const QByteArray tiledChartPdfBytes = tiledChartPdfFile.readAll();
+        if (tiledChartPdfBytes.contains("/Subtype /Image") || tiledChartPdfBytes.contains("/Subtype/Image")) {
+            return fail(QStringLiteral("Tiled PDF charts should be drawn directly, not embedded as raster images."));
+        }
+
+        const QString tiledChartTextPath = QDir(tempDir.path()).filePath(QStringLiteral("tiled-chart-pattern.txt"));
+        const int tiledChartExitCode = QProcess::execute(pdfToText, {tiledChartPdfPath, tiledChartTextPath});
+        if (tiledChartExitCode != 0) {
+            return fail(QStringLiteral("pdftotext could not read the tiled chart PDF."));
+        }
+        QFile tiledChartTextFile(tiledChartTextPath);
+        if (!tiledChartTextFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            return fail(QStringLiteral("Could not read generated tiled chart PDF text."));
+        }
+        const QString tiledChartPdfText = QString::fromUtf8(tiledChartTextFile.readAll());
+        if (tiledChartPdfText.contains(QStringLiteral("Color Chart - Tile"))) {
+            return fail(QStringLiteral("Large PDF export should not include tiled color chart pages."));
+        }
+        if (!tiledChartPdfText.contains(QStringLiteral("Pattern Info")) ||
+            !tiledChartPdfText.contains(QStringLiteral("Legend")) ||
+            !tiledChartPdfText.contains(QStringLiteral("Color Overview")) ||
+            !tiledChartPdfText.contains(QStringLiteral("Black-and-White Symbol Chart - Tile 4 of 9")) ||
+            !tiledChartPdfText.contains(QStringLiteral("Columns 1-100, Rows 101-200")) ||
+            !tiledChartPdfText.contains(QStringLiteral("Columns 201-201, Rows 201-201"))) {
+            return fail(QStringLiteral("Large PDF charts should include tile titles with absolute stitch ranges."));
+        }
+        if (!tiledChartPdfText.contains(QStringLiteral("110"))) {
+            return fail(QStringLiteral("Tiled PDF grid numbers should use absolute stitch coordinates."));
+        }
     }
 
     const PatternModel emptyPattern = PatternModel::fromImage(QImage());

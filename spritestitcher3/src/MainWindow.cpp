@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 
 #include <QAbstractItemView>
+#include <QApplication>
 #include <QBrush>
 #include <QCheckBox>
 #include <QColor>
@@ -18,6 +19,7 @@
 #include <QMessageBox>
 #include <QPainter>
 #include <QPixmap>
+#include <QProgressDialog>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSizePolicy>
@@ -313,26 +315,6 @@ void MainWindow::exportPdf() {
         return;
     }
 
-    const qint64 stitchArea = static_cast<qint64>(m_patternModel.imageWidth) * static_cast<qint64>(m_patternModel.imageHeight);
-    const qint64 largePatternLimit = 12000;
-
-    if (stitchArea > largePatternLimit) {
-        QMessageBox::warning(
-            this,
-            QStringLiteral("Export PDF"),
-            QStringLiteral(
-                "This pattern is too large for the current PDF exporter.\n\n"
-                "Pattern size: %1 x %2 stitches\n"
-                "Total grid area: %3 stitches\n\n"
-                "Large tiled PDF export is the next feature we need to add. "
-                "For now, PDF export is limited to %4 stitches so the app does not lock up.")
-                .arg(m_patternModel.imageWidth)
-                .arg(m_patternModel.imageHeight)
-                .arg(stitchArea)
-                .arg(largePatternLimit));
-        return;
-    }
-
     QString defaultDirectory;
     QString defaultFileName = QStringLiteral("spritestitcher3_pattern.pdf");
     QString imageName = QStringLiteral("Untitled Sprite");
@@ -358,8 +340,37 @@ void MainWindow::exportPdf() {
     }
     const QString path = withPdfSuffix(dialog.selectedFiles().first());
 
+    QProgressDialog progress(
+        QStringLiteral("Preparing PDF export..."),
+        QStringLiteral("Cancel"),
+        0,
+        1,
+        this);
+    progress.setWindowModality(Qt::WindowModal);
+    progress.setMinimumDuration(0);
+    progress.setAutoClose(false);
+    progress.setAutoReset(false);
+    progress.setValue(0);
+    QApplication::processEvents();
+
+    m_exportPdfButton->setEnabled(false);
+
+    const PdfProgressCallback progressCallback = [&](int current, int maximum, const QString &statusText) {
+        const int resolvedMaximum = std::max(1, maximum);
+        progress.setMaximum(resolvedMaximum);
+        progress.setLabelText(statusText.isEmpty() ? QStringLiteral("Exporting PDF...") : statusText);
+        progress.setValue(std::clamp(current, 0, resolvedMaximum));
+        QApplication::processEvents();
+        return !progress.wasCanceled();
+    };
+
     QString error;
-    if (!m_patternModel.writePdfFile(path, imageName, currentChartCellSize(), &error)) {
+    if (!m_patternModel.writePdfFile(path, imageName, currentChartCellSize(), &error, progressCallback)) {
+        m_exportPdfButton->setEnabled(true);
+        progress.close();
+        if (progress.wasCanceled() || error == QStringLiteral("PDF export canceled.")) {
+            return;
+        }
         QMessageBox::warning(
             this,
             QStringLiteral("Export PDF"),
@@ -368,6 +379,10 @@ void MainWindow::exportPdf() {
                      error.isEmpty() ? QStringLiteral("Unknown error.") : error));
         return;
     }
+
+    progress.setValue(progress.maximum());
+    progress.close();
+    m_exportPdfButton->setEnabled(true);
 
     QMessageBox::information(
         this,
