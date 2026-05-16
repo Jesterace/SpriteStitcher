@@ -12,6 +12,7 @@
 #include <QProcess>
 #include <QStandardPaths>
 #include <QTemporaryDir>
+#include <algorithm>
 #include <cstdio>
 
 namespace {
@@ -748,18 +749,52 @@ int main(int argc, char *argv[]) {
             return fail(QStringLiteral("Could not read generated same-page legend PDF text."));
         }
         const QString samePageLegendPdfText = QString::fromUtf8(samePageLegendTextFile.readAll());
-        auto sectionHasLegendBeforePageBreak = [&](const QString &sectionTitle) {
-            const qsizetype sectionIndex = samePageLegendPdfText.indexOf(sectionTitle);
+        auto sectionPageHasLegend = [](const QString &pdfText, const QString &sectionTitle) {
+            const qsizetype sectionIndex = pdfText.indexOf(sectionTitle);
             if (sectionIndex < 0) {
                 return false;
             }
-            const qsizetype legendIndex = samePageLegendPdfText.indexOf(QStringLiteral("Legend"), sectionIndex);
-            const qsizetype pageBreakIndex = samePageLegendPdfText.indexOf(QChar::FormFeed, sectionIndex);
-            return legendIndex >= 0 && (pageBreakIndex < 0 || legendIndex < pageBreakIndex);
+            const qsizetype pageBreakIndex = pdfText.indexOf(QChar::FormFeed, sectionIndex);
+            const qsizetype pageStart = std::max<qsizetype>(0, pdfText.lastIndexOf(QChar::FormFeed, sectionIndex) + 1);
+            const qsizetype pageEnd = pageBreakIndex < 0 ? pdfText.size() : pageBreakIndex;
+            const qsizetype legendIndex = pdfText.indexOf(QStringLiteral("Legend"), pageStart);
+            return legendIndex >= 0 && legendIndex < pageEnd;
         };
-        if (!sectionHasLegendBeforePageBreak(QStringLiteral("Color Chart")) ||
-            !sectionHasLegendBeforePageBreak(QStringLiteral("Black-and-White Symbol Chart"))) {
+        if (!sectionPageHasLegend(samePageLegendPdfText, QStringLiteral("Color Chart")) ||
+            !sectionPageHasLegend(samePageLegendPdfText, QStringLiteral("Black-and-White Symbol Chart"))) {
             return fail(QStringLiteral("Small wide PDF chart sections should keep a fitting legend on the same page."));
+        }
+
+        QImage rightSideLegendImage(30, 70, QImage::Format_ARGB32);
+        for (int y = 0; y < rightSideLegendImage.height(); ++y) {
+            for (int x = 0; x < rightSideLegendImage.width(); ++x) {
+                rightSideLegendImage.setPixel(x, y, samePageLegendColors[(x / 6) % samePageLegendColors.size()].rgba());
+            }
+        }
+
+        const PatternModel rightSideLegendPattern = PatternModel::fromImage(rightSideLegendImage);
+        if (!rightSideLegendPattern.ok || rightSideLegendPattern.matchedColors.size() != samePageLegendColors.size()) {
+            return fail(QStringLiteral("Expected right-side legend PDF pattern to build with five matched colors."));
+        }
+
+        const QString rightSideLegendPdfPath = QDir(tempDir.path()).filePath(QStringLiteral("right-side-legend-pattern.pdf"));
+        if (!rightSideLegendPattern.writePdfFile(rightSideLegendPdfPath, QStringLiteral("Right Side Legend Sprite"), 10, &pdfError)) {
+            return fail(QStringLiteral("Right-side legend PDF write failed: ") + pdfError);
+        }
+
+        const QString rightSideLegendTextPath = QDir(tempDir.path()).filePath(QStringLiteral("right-side-legend-pattern.txt"));
+        const int rightSideLegendExitCode = QProcess::execute(pdfToText, {rightSideLegendPdfPath, rightSideLegendTextPath});
+        if (rightSideLegendExitCode != 0) {
+            return fail(QStringLiteral("pdftotext could not read the right-side legend PDF."));
+        }
+        QFile rightSideLegendTextFile(rightSideLegendTextPath);
+        if (!rightSideLegendTextFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            return fail(QStringLiteral("Could not read generated right-side legend PDF text."));
+        }
+        const QString rightSideLegendPdfText = QString::fromUtf8(rightSideLegendTextFile.readAll());
+        if (!sectionPageHasLegend(rightSideLegendPdfText, QStringLiteral("Color Chart")) ||
+            !sectionPageHasLegend(rightSideLegendPdfText, QStringLiteral("Black-and-White Symbol Chart"))) {
+            return fail(QStringLiteral("Medium PDF chart sections should use a same-page right-side legend when readable."));
         }
 
         const QString pdfToPpm = QStandardPaths::findExecutable(QStringLiteral("pdftoppm"));

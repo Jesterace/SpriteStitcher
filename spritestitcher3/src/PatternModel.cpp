@@ -941,8 +941,27 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
         return QVector<int>{symbolWidth, swatchWidth, codeWidth, nameWidth, countWidth};
     };
 
+    auto minimumLegendColumnWidths = [&]() {
+        const QFontMetrics rowMetrics(legendRowFont);
+        const int horizontalPadding = pointsToPixels(4, dpi);
+        const int swatchPadding = pointsToPixels(12, dpi);
+
+        const int symbolWidth = rowMetrics.horizontalAdvance(QStringLiteral("W")) + horizontalPadding * 2;
+        const int swatchWidth = rowHeight + swatchPadding;
+        const int codeWidth = std::max(rowMetrics.horizontalAdvance(QStringLiteral("White")),
+                                       rowMetrics.horizontalAdvance(QStringLiteral("0000")))
+            + horizontalPadding * 2;
+        const int nameWidth = rowMetrics.horizontalAdvance(QStringLiteral("Name")) + horizontalPadding * 2;
+        const int countWidth = std::max(rowMetrics.horizontalAdvance(QString::number(std::max(opaqueStitchPixels, 9999))),
+                                        rowMetrics.horizontalAdvance(headers.value(4)))
+            + horizontalPadding * 2;
+
+        return QVector<int>{symbolWidth, swatchWidth, codeWidth, nameWidth, countWidth};
+    };
+
     auto legendColumnWidths = [&](int maxTableWidth) {
         QVector<int> widths = preferredLegendColumnWidths();
+        const QVector<int> minimumWidths = minimumLegendColumnWidths();
 
         int totalWidth = 0;
         for (int width : widths) {
@@ -953,11 +972,19 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
             return widths;
         }
 
-        const int fixedWidth = widths[0] + widths[1] + widths[2] + widths[4];
-        const int minNameWidth = QFontMetrics(legendHeaderFont).horizontalAdvance(headers.value(3))
-            + pointsToPixels(16, dpi);
-
-        widths[3] = std::max(minNameWidth, maxTableWidth - fixedWidth);
+        int extraWidth = totalWidth - maxTableWidth;
+        const QVector<int> shrinkOrder{3, 4, 2, 0};
+        for (int column : shrinkOrder) {
+            const int shrink = std::min(extraWidth, widths[column] - minimumWidths[column]);
+            if (shrink <= 0) {
+                continue;
+            }
+            widths[column] -= shrink;
+            extraWidth -= shrink;
+            if (extraWidth <= 0) {
+                break;
+            }
+        }
         return widths;
     };
 
@@ -968,6 +995,15 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
             totalWidth += width;
         }
         return std::min(maxTableWidth, totalWidth);
+    };
+
+    auto minimumLegendTableWidth = [&]() {
+        const QVector<int> widths = minimumLegendColumnWidths();
+        int totalWidth = 0;
+        for (int width : widths) {
+            totalWidth += width;
+        }
+        return totalWidth;
     };
 
     auto drawRow = [&](const QRect &tableArea, int &rowY, const QStringList &values, const QColor &swatchColor, bool header) {
@@ -1147,9 +1183,9 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
     };
 
     const double chartMinReadableCell = pointsToPixels(9, dpi);
-    const int minSideLegendWidth = pointsToPixels(185, dpi);
-    const int minChartWidth = pointsToPixels(260, dpi);
-    const int desiredSideLegendWidth = content.width() * 42 / 100;
+    const double inlineChartMinReadableCell = pointsToPixels(6.5, dpi);
+    const int minSideLegendWidth = std::max(pointsToPixels(135, dpi), minimumLegendTableWidth());
+    const int minChartWidth = pointsToPixels(180, dpi);
     const int fullLegendHeight = legendTitleHeight + smallGap + rowHeight * (matchedColors.size() + 1);
 
     auto drawChartWithBestLegend = [&](const QString &heading, ChartMode chartMode, int pageTop, double minReadableCell) {
@@ -1160,34 +1196,55 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
             return true;
         }
 
+        const double fullPageCell = effectiveCellSize(pageArea, headingLines.size(), imageWidth, imageHeight);
+        auto chartRemainsReadable = [&](const QRect &chartArea) {
+            const double cellSize = effectiveCellSize(chartArea, headingLines.size(), imageWidth, imageHeight);
+            return cellSize >= minReadableCell ||
+                (cellSize >= inlineChartMinReadableCell && cellSize >= fullPageCell * 0.78);
+        };
+
         const int fullPageChartBottom = chartDrawnBottomForArea(pageArea, headingLines.size(), imageWidth, imageHeight);
         const int belowFullChartLegendTop = fullPageChartBottom + 1 + gap;
-        if (fullPageChartBottom >= pageArea.top() &&
-            belowFullChartLegendTop + fullLegendHeight - 1 <= pageArea.bottom()) {
+        auto drawLegendBelowUnshrunkChart = [&]() {
+            if (fullPageChartBottom < pageArea.top() ||
+                belowFullChartLegendTop + fullLegendHeight - 1 > pageArea.bottom()) {
+                return false;
+            }
             const QRect legendArea(pageArea.left(),
                                    belowFullChartLegendTop,
                                    pageArea.width(),
                                    pageArea.bottom() - belowFullChartLegendTop + 1);
-            if (legendFits(legendArea)) {
-                drawChartSection(headingLines, chartMode, pageArea, 0, 0, imageWidth, imageHeight);
-                drawLegendRows(legendArea, 0, false);
-                return true;
+            if (!legendFits(legendArea)) {
+                return false;
             }
+
+            drawChartSection(headingLines, chartMode, pageArea, 0, 0, imageWidth, imageHeight);
+            drawLegendRows(legendArea, 0, false);
+            return true;
+        };
+
+        const bool preferBelowForWideShortChart = imageWidth >= imageHeight * 2;
+        if (preferBelowForWideShortChart && drawLegendBelowUnshrunkChart()) {
+            return true;
         }
 
         const int maxSideLegendWidth = pageArea.width() - gap - minChartWidth;
 
         if (maxSideLegendWidth >= minSideLegendWidth) {
-            const int sideLegendWidth = std::min(std::max(desiredSideLegendWidth, minSideLegendWidth), maxSideLegendWidth);
+            const int sideLegendWidth = minSideLegendWidth;
             const int chartWidth = pageArea.width() - gap - sideLegendWidth;
             const QRect chartArea(pageArea.left(), pageArea.top(), chartWidth, pageArea.height());
             const QRect legendArea(chartArea.right() + 1 + gap, pageArea.top(), sideLegendWidth, pageArea.height());
 
-            if (effectiveCellSize(chartArea, headingLines.size(), imageWidth, imageHeight) >= minReadableCell && legendFits(legendArea)) {
+            if (chartRemainsReadable(chartArea) && legendFits(legendArea)) {
                 drawChartSection(headingLines, chartMode, chartArea, 0, 0, imageWidth, imageHeight);
                 drawLegendRows(legendArea, 0, false);
                 return true;
             }
+        }
+
+        if (drawLegendBelowUnshrunkChart()) {
+            return true;
         }
 
         if (fullLegendHeight + gap < pageArea.height()) {
@@ -1195,7 +1252,7 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
             const QRect chartArea(pageArea.left(), pageArea.top(), pageArea.width(), chartHeight);
             const QRect legendArea(pageArea.left(), chartArea.bottom() + 1 + gap, pageArea.width(), fullLegendHeight);
 
-            if (effectiveCellSize(chartArea, headingLines.size(), imageWidth, imageHeight) >= minReadableCell && legendFits(legendArea)) {
+            if (chartRemainsReadable(chartArea) && legendFits(legendArea)) {
                 drawChartSection(headingLines, chartMode, chartArea, 0, 0, imageWidth, imageHeight);
                 drawLegendRows(legendArea, 0, false);
                 return true;
