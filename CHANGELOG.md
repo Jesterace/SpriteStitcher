@@ -37,3 +37,25 @@ Updated for v2.8.4: added selectable chart symbol styles (clean cross-stitch, si
 - Added adjustable heights for left-side panels.
 - Added scrollable left-side sections where needed.
 - Saved left panel sizes between launches.
+
+## SpriteStitcher 3.0 dev1
+
+### Added
+- SpriteStitcher 3 development build scripts.
+- SpriteStitcher 3 AppImage build script.
+- PDF export options dialog.
+- Large-pattern tiled PDF export mode.
+- Practical large-pattern output for very large sprites.
+- PDF QA sprite.
+- Cleaner default chart symbol set.
+- Improved chart symbol readability/alignment.
+- Improved PDF legend sizing and page padding.
+- Improved pattern summary layout.
+- Crisp direct PDF chart rendering instead of raster-only chart embedding.
+
+### Fixed
+- Prevented large patterns from locking up the app with old full-page PDF export.
+- Fixed symbol readability problems in PDF charts.
+- Fixed awkward triangle and hollow-square symbol alignment.
+- Fixed legend/table layout running too close to page edges.
+- Improved large-pattern export behavior for patterns like Woodybig.
