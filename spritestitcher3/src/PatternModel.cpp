@@ -106,9 +106,18 @@ void drawCenteredSymbol(QPainter &painter, const QRectF &rect, const QString &sy
     painter.setRenderHint(QPainter::TextAntialiasing, true);
 
     const QRectF textBounds = metrics.boundingRect(symbol);
-    const QPointF textPos(
+    QPointF textPos(
         rect.left() + (rect.width() - textBounds.width()) / 2 - textBounds.left(),
         rect.top() + (rect.height() - textBounds.height()) / 2 - textBounds.top());
+
+    // Triangles look visually low even when their font bounds are centered.
+    // Nudge only triangle glyphs upward so they sit better inside the cell/backing circle.
+    if (symbol == QStringLiteral("▲") || symbol == QStringLiteral("△")) {
+        textPos.ry() -= rect.height() * 0.09;
+    } else if (symbol == QStringLiteral("□")) {
+        textPos.ry() -= rect.height() * 0.04;
+    }
+
     QPainterPath path;
     path.addText(textPos, font, symbol);
 
@@ -553,7 +562,7 @@ bool PatternModel::writeChartPngFile(const QString &path, int cellSize, QString 
     return true;
 }
 
-bool PatternModel::writePdfFile(const QString &path, const QString &imageName, int chartCellSize, QString *errorMessage, const PdfProgressCallback &progressCallback) const {
+bool PatternModel::writePdfFile(const QString &path, const QString &imageName, int chartCellSize, QString *errorMessage, const PdfExportOptions &options, const PdfProgressCallback &progressCallback) const {
     const int pdfChartCellSize = std::max(chartCellSize, 40);
     if (!ok || imageWidth <= 0 || imageHeight <= 0) {
         if (errorMessage) {
@@ -563,6 +572,20 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
         }
         return false;
     }
+    if (!options.includePatternInfo &&
+        !options.includeLegend &&
+        !options.includeColorOverview &&
+        !options.includeBlackAndWhiteSymbolChart &&
+        !options.includeTiledColorChart) {
+        if (errorMessage) {
+            *errorMessage = QStringLiteral("Select at least one PDF section to export.");
+        }
+        return false;
+    }
+    const int resolvedTileSize =
+        (options.tileSize == 50 || options.tileSize == 75 || options.tileSize == 100 || options.tileSize == 125)
+            ? options.tileSize
+            : 100;
     const int dpi = 300;
     QPdfWriter writer(path);
     writer.setResolution(dpi);
@@ -598,7 +621,6 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
     const int chartTopInset = pointsToPixels(8, dpi);
     const int chartBottomInset = pointsToPixels(18, dpi);
     const int legendBottomPadding = pointsToPixels(24, dpi);
-    int y = content.top();
     int progressValue = 0;
     int progressMaximum = 1;
 
@@ -716,6 +738,8 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
         return summaryRect.bottom() + gap;
     };
 
+    const bool useTiledCharts = imageWidth > resolvedTileSize || imageHeight > resolvedTileSize;
+
     auto drawCoverPage = [&]() {
         const int nextY = drawPdfHeader(content.top());
 
@@ -738,9 +762,15 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
         const int lineGap = pointsToPixels(3, dpi);
         int infoY = nextY + titleHeight + smallGap;
         const QStringList infoLines{
-            QStringLiteral("Large-pattern PDF export uses 100 x 100 stitch black-and-white symbol chart tiles."),
-            QStringLiteral("Grid numbers on tiled chart pages use absolute pattern coordinates."),
-            QStringLiteral("The color chart is included as a full-pattern overview when it fits on one page.")
+            useTiledCharts
+                ? QStringLiteral("Large-pattern PDF export uses %1 x %1 stitch chart tiles.").arg(resolvedTileSize)
+                : QStringLiteral("Small-pattern PDF export uses full-pattern chart pages."),
+            useTiledCharts
+                ? QStringLiteral("Grid numbers on tiled chart pages use absolute pattern coordinates.")
+                : QStringLiteral("Grid numbers appear every 10 stitches."),
+            options.includeColorOverview
+                ? QStringLiteral("The color chart is included as a full-pattern overview when it fits on one page.")
+                : QStringLiteral("The color overview page is disabled for this export.")
         };
 
         for (const QString &line : infoLines) {
@@ -793,7 +823,6 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
             }
             return false;
         }
-        y = content.top();
         return true;
     };
 
@@ -1109,6 +1138,11 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
     auto drawChartWithBestLegend = [&](const QString &heading, ChartMode chartMode, int pageTop, double minReadableCell) {
         const QStringList headingLines{heading};
         const QRect pageArea(content.left(), pageTop, content.width(), std::max(1, contentBottom - pageTop - legendBottomPadding));
+        if (!options.includeLegend) {
+            drawChartSection(headingLines, chartMode, pageArea, 0, 0, imageWidth, imageHeight);
+            return true;
+        }
+
         const int maxSideLegendWidth = pageArea.width() - gap - minChartWidth;
 
         if (maxSideLegendWidth >= minSideLegendWidth) {
@@ -1144,7 +1178,7 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
     };
 
     auto chartTiles = [&]() {
-        const int tileSize = 100;
+        const int tileSize = resolvedTileSize;
         const int columnCount = (imageWidth + tileSize - 1) / tileSize;
         const int rowCount = (imageHeight + tileSize - 1) / tileSize;
         QVector<ChartTile> tiles;
@@ -1213,69 +1247,152 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
     };
 
     const QRect fullChartPageArea(content.left(), content.top(), content.width(), std::max(1, content.height() - legendBottomPadding));
-    const bool useTiledCharts = imageWidth > 100 || imageHeight > 100;
     const double overviewMinCell = pointsToPixels(1.5, dpi);
-    const bool drawColorOverview = effectiveCellSize(fullChartPageArea, 1, imageWidth, imageHeight) >= overviewMinCell;
-    progressMaximum = useTiledCharts
-        ? std::max(1, static_cast<int>(tiles.size()) + (drawColorOverview ? 4 : 3))
-        : 4;
+    const bool drawColorOverview = options.includeColorOverview &&
+        effectiveCellSize(fullChartPageArea, 1, imageWidth, imageHeight) >= overviewMinCell;
+    const int tilePageCount = static_cast<int>(tiles.size());
+    const bool hasRenderableSelection = useTiledCharts
+        ? options.includePatternInfo ||
+              options.includeLegend ||
+              drawColorOverview ||
+              options.includeTiledColorChart ||
+              options.includeBlackAndWhiteSymbolChart
+        : options.includePatternInfo ||
+              options.includeLegend ||
+              options.includeColorOverview ||
+              options.includeTiledColorChart ||
+              options.includeBlackAndWhiteSymbolChart;
+
+    if (!hasRenderableSelection) {
+        painter.end();
+        if (errorMessage) {
+            *errorMessage = QStringLiteral("No selected PDF sections can be rendered for this pattern.");
+        }
+        return false;
+    }
 
     if (useTiledCharts) {
-        if (!reportProgress(QStringLiteral("Drawing cover page..."))) {
-            painter.end();
-            return false;
-        }
-        drawCoverPage();
+        progressMaximum =
+            (options.includePatternInfo ? 1 : 0) +
+            (options.includeLegend ? 1 : 0) +
+            (drawColorOverview ? 1 : 0) +
+            (options.includeTiledColorChart ? tilePageCount : 0) +
+            (options.includeBlackAndWhiteSymbolChart ? tilePageCount : 0);
+    } else {
+        const bool hasFullSmallCharts = options.includeColorOverview || options.includeBlackAndWhiteSymbolChart;
+        progressMaximum =
+            (options.includePatternInfo && !hasFullSmallCharts ? 1 : 0) +
+            (options.includeLegend && !hasFullSmallCharts ? 1 : 0) +
+            (options.includeColorOverview ? 1 : 0) +
+            (options.includeTiledColorChart ? tilePageCount : 0) +
+            (options.includeBlackAndWhiteSymbolChart ? 1 : 0);
+    }
+    progressMaximum = std::max(1, progressMaximum);
 
-        if (!newPage()) {
-            painter.end();
-            return false;
+    bool hasPageContent = false;
+    auto beginSectionPage = [&]() -> bool {
+        if (!hasPageContent) {
+            hasPageContent = true;
+            return true;
         }
-        if (!drawLegendPages(0, false)) {
-            painter.end();
-            return false;
-        }
+        return newPage();
+    };
 
-        if (drawColorOverview) {
-            if (!newPage()) {
+    if (useTiledCharts) {
+        if (options.includePatternInfo) {
+            if (!beginSectionPage() ||
+                !reportProgress(QStringLiteral("Drawing cover page..."))) {
                 painter.end();
                 return false;
             }
-            if (!reportProgress(QStringLiteral("Drawing color overview..."))) {
+            drawCoverPage();
+        }
+
+        if (options.includeLegend) {
+            if (!beginSectionPage() ||
+                !drawLegendPages(0, false)) {
+                painter.end();
+                return false;
+            }
+        }
+
+        if (drawColorOverview) {
+            if (!beginSectionPage() ||
+                !reportProgress(QStringLiteral("Drawing color overview..."))) {
                 painter.end();
                 return false;
             }
             drawFullPageChart(QStringLiteral("Color Overview"), ChartMode::ColorsOnly);
         }
-    } else {
-        y = drawPdfHeader(content.top());
-        if (!reportProgress(QStringLiteral("Drawing color chart..."))) {
-            painter.end();
-            return false;
-        }
-        if (!drawChartWithBestLegend(QStringLiteral("Color Chart"), ChartMode::ColorAndSymbols, y, chartMinReadableCell)) {
-            painter.end();
-            return false;
-        }
-    }
 
-    if (!newPage()) {
-        painter.end();
-        return false;
-    }
+        if (options.includeTiledColorChart) {
+            if (!beginSectionPage() ||
+                !drawTiledChart(QStringLiteral("Color Chart"), ChartMode::ColorAndSymbols)) {
+                painter.end();
+                return false;
+            }
+        }
 
-    if (useTiledCharts) {
-        if (!drawTiledChart(QStringLiteral("Black-and-White Symbol Chart"), ChartMode::SymbolsOnly)) {
-            painter.end();
-            return false;
+        if (options.includeBlackAndWhiteSymbolChart) {
+            if (!beginSectionPage() ||
+                !drawTiledChart(QStringLiteral("Black-and-White Symbol Chart"), ChartMode::SymbolsOnly)) {
+                painter.end();
+                return false;
+            }
         }
     } else {
-        y = drawPdfHeader(content.top());
-        if (!reportProgress(QStringLiteral("Drawing black-and-white symbol chart..."))) {
+        const bool hasFullSmallCharts = options.includeColorOverview || options.includeBlackAndWhiteSymbolChart;
+
+        if (options.includePatternInfo && !hasFullSmallCharts) {
+            if (!beginSectionPage() ||
+                !reportProgress(QStringLiteral("Drawing cover page..."))) {
+                painter.end();
+                return false;
+            }
+            drawCoverPage();
+        }
+
+        if (options.includeLegend && !hasFullSmallCharts) {
+            if (!beginSectionPage() ||
+                !drawLegendPages(0, false)) {
+                painter.end();
+                return false;
+            }
+        }
+
+        auto drawSmallChart = [&](const QString &heading, ChartMode chartMode, const QString &statusText) {
+            if (!beginSectionPage()) {
+                return false;
+            }
+            const int pageTop = options.includePatternInfo
+                ? drawPdfHeader(content.top())
+                : content.top();
+            if (!reportProgress(statusText)) {
+                return false;
+            }
+            return drawChartWithBestLegend(heading, chartMode, pageTop, chartMinReadableCell);
+        };
+
+        if (options.includeColorOverview &&
+            !drawSmallChart(QStringLiteral("Color Chart"),
+                            ChartMode::ColorAndSymbols,
+                            QStringLiteral("Drawing color chart..."))) {
             painter.end();
             return false;
         }
-        if (!drawChartWithBestLegend(QStringLiteral("Black-and-White Symbol Chart"), ChartMode::SymbolsOnly, y, chartMinReadableCell)) {
+
+        if (options.includeTiledColorChart) {
+            if (!beginSectionPage() ||
+                !drawTiledChart(QStringLiteral("Color Chart"), ChartMode::ColorAndSymbols)) {
+                painter.end();
+                return false;
+            }
+        }
+
+        if (options.includeBlackAndWhiteSymbolChart &&
+            !drawSmallChart(QStringLiteral("Black-and-White Symbol Chart"),
+                            ChartMode::SymbolsOnly,
+                            QStringLiteral("Drawing black-and-white symbol chart..."))) {
             painter.end();
             return false;
         }
