@@ -714,6 +714,54 @@ int main(int argc, char *argv[]) {
             return fail(QStringLiteral("Pattern PDF should place a side legend with each chart page."));
         }
 
+        QImage samePageLegendImage(95, 10, QImage::Format_ARGB32);
+        const QVector<QColor> samePageLegendColors{
+            QColor(227, 29, 66),
+            QColor(71, 167, 47),
+            QColor(252, 251, 248),
+            QColor(0, 0, 0),
+            QColor(71, 129, 165)
+        };
+        for (int y = 0; y < samePageLegendImage.height(); ++y) {
+            for (int x = 0; x < samePageLegendImage.width(); ++x) {
+                samePageLegendImage.setPixel(x, y, samePageLegendColors[(x / 19) % samePageLegendColors.size()].rgba());
+            }
+        }
+
+        const PatternModel samePageLegendPattern = PatternModel::fromImage(samePageLegendImage);
+        if (!samePageLegendPattern.ok || samePageLegendPattern.matchedColors.size() != samePageLegendColors.size()) {
+            return fail(QStringLiteral("Expected same-page legend PDF pattern to build with five matched colors."));
+        }
+
+        const QString samePageLegendPdfPath = QDir(tempDir.path()).filePath(QStringLiteral("same-page-legend-pattern.pdf"));
+        if (!samePageLegendPattern.writePdfFile(samePageLegendPdfPath, QStringLiteral("Same Page Legend Sprite"), 10, &pdfError)) {
+            return fail(QStringLiteral("Same-page legend PDF write failed: ") + pdfError);
+        }
+
+        const QString samePageLegendTextPath = QDir(tempDir.path()).filePath(QStringLiteral("same-page-legend-pattern.txt"));
+        const int samePageLegendExitCode = QProcess::execute(pdfToText, {samePageLegendPdfPath, samePageLegendTextPath});
+        if (samePageLegendExitCode != 0) {
+            return fail(QStringLiteral("pdftotext could not read the same-page legend PDF."));
+        }
+        QFile samePageLegendTextFile(samePageLegendTextPath);
+        if (!samePageLegendTextFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            return fail(QStringLiteral("Could not read generated same-page legend PDF text."));
+        }
+        const QString samePageLegendPdfText = QString::fromUtf8(samePageLegendTextFile.readAll());
+        auto sectionHasLegendBeforePageBreak = [&](const QString &sectionTitle) {
+            const qsizetype sectionIndex = samePageLegendPdfText.indexOf(sectionTitle);
+            if (sectionIndex < 0) {
+                return false;
+            }
+            const qsizetype legendIndex = samePageLegendPdfText.indexOf(QStringLiteral("Legend"), sectionIndex);
+            const qsizetype pageBreakIndex = samePageLegendPdfText.indexOf(QChar::FormFeed, sectionIndex);
+            return legendIndex >= 0 && (pageBreakIndex < 0 || legendIndex < pageBreakIndex);
+        };
+        if (!sectionHasLegendBeforePageBreak(QStringLiteral("Color Chart")) ||
+            !sectionHasLegendBeforePageBreak(QStringLiteral("Black-and-White Symbol Chart"))) {
+            return fail(QStringLiteral("Small wide PDF chart sections should keep a fitting legend on the same page."));
+        }
+
         const QString pdfToPpm = QStandardPaths::findExecutable(QStringLiteral("pdftoppm"));
         if (!pdfToPpm.isEmpty()) {
             QImage pdfSymbolImage(4, 4, QImage::Format_ARGB32);

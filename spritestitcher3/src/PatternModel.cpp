@@ -1099,6 +1099,23 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
             static_cast<double>(targetSize.height()) / stitchHeight);
     };
 
+    auto chartDrawnBottomForArea = [&](const QRect &area, int titleLineCount, int stitchWidth, int stitchHeight) {
+        const QRect sectionArea = chartSectionArea(area);
+        if (sectionArea.isEmpty()) {
+            return -1;
+        }
+
+        const int firstTopMarker = 10;
+        const bool drawTopNumbers = firstTopMarker <= stitchWidth;
+        const int topNumberMargin = drawTopNumbers ? gridNumberHeight + gridNumberPadding : 0;
+        const int chartTop = sectionArea.top() + chartTitleBlockHeight(titleLineCount) + smallGap + topNumberMargin;
+        const QSizeF targetSize = chartTargetSizeForArea(area, titleLineCount, stitchWidth, stitchHeight);
+        if (targetSize.isEmpty()) {
+            return -1;
+        }
+        return static_cast<int>(std::ceil(chartTop + targetSize.height())) - 1;
+    };
+
     auto drawLegendPages = [&](int startIndex, bool continued) {
         int legendIndex = startIndex;
         bool drewPage = false;
@@ -1141,6 +1158,21 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
         if (!options.includeLegend) {
             drawChartSection(headingLines, chartMode, pageArea, 0, 0, imageWidth, imageHeight);
             return true;
+        }
+
+        const int fullPageChartBottom = chartDrawnBottomForArea(pageArea, headingLines.size(), imageWidth, imageHeight);
+        const int belowFullChartLegendTop = fullPageChartBottom + 1 + gap;
+        if (fullPageChartBottom >= pageArea.top() &&
+            belowFullChartLegendTop + fullLegendHeight - 1 <= pageArea.bottom()) {
+            const QRect legendArea(pageArea.left(),
+                                   belowFullChartLegendTop,
+                                   pageArea.width(),
+                                   pageArea.bottom() - belowFullChartLegendTop + 1);
+            if (legendFits(legendArea)) {
+                drawChartSection(headingLines, chartMode, pageArea, 0, 0, imageWidth, imageHeight);
+                drawLegendRows(legendArea, 0, false);
+                return true;
+            }
         }
 
         const int maxSideLegendWidth = pageArea.width() - gap - minChartWidth;
