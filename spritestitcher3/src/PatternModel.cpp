@@ -63,42 +63,49 @@ void drawCenteredSymbol(QPainter &painter, const QRectF &rect, const QString &sy
 
     QFont font = painter.font();
     font.setBold(true);
-    int symbolPixelSize = std::max(9, static_cast<int>(std::round(rect.height() * 0.86)));
+    font.setHintingPreference(QFont::PreferFullHinting);
+    font.setStyleStrategy(QFont::PreferAntialias);
+
+    int symbolPixelSize = std::max(9, static_cast<int>(std::round(rect.height() * 0.78)));
     font.setPixelSize(symbolPixelSize);
+
     QFontMetricsF metrics(font);
     while (symbolPixelSize > 6 &&
-           (metrics.horizontalAdvance(symbol) > rect.width() * 0.9 ||
-            metrics.height() > rect.height() * 0.94)) {
+           (metrics.horizontalAdvance(symbol) > rect.width() * 0.78 ||
+            metrics.height() > rect.height() * 0.84)) {
         --symbolPixelSize;
         font.setPixelSize(symbolPixelSize);
         metrics = QFontMetricsF(font);
     }
-    painter.setFont(font);
-
-    painter.setRenderHint(QPainter::Antialiasing, true);
-    painter.setRenderHint(QPainter::TextAntialiasing, true);
-
-    const QRectF textBounds = metrics.boundingRect(symbol);
-    const QPointF textPos(
-        rect.left() + (rect.width() - textBounds.width()) / 2 - textBounds.left(),
-        rect.top() + (rect.height() - textBounds.height()) / 2 - textBounds.top());
-    QPainterPath path;
-    path.addText(textPos, font, symbol);
 
     QColor textColor(Qt::black);
-    QColor outlineColor(Qt::white);
+
     if (chartMode == ChartMode::ColorAndSymbols) {
         const int luminance = (fill.red() * 299 + fill.green() * 587 + fill.blue() * 114) / 1000;
         textColor = luminance < 140 ? QColor(Qt::white) : QColor(Qt::black);
-        outlineColor = textColor == QColor(Qt::white) ? QColor(Qt::black) : QColor(Qt::white);
 
-        QPen outlinePen(outlineColor);
-        outlinePen.setWidthF(std::max(0.75, rect.width() * 0.035));
-        outlinePen.setJoinStyle(Qt::RoundJoin);
-        painter.strokePath(path, outlinePen);
+        QColor backingColor = textColor == QColor(Qt::white)
+            ? QColor(0, 0, 0, 135)
+            : QColor(255, 255, 255, 155);
+
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        painter.setBrush(backingColor);
+        painter.setPen(Qt::NoPen);
+
+        const qreal dotSize = std::min(rect.width(), rect.height()) * 0.74;
+        const QRectF dotRect(
+            rect.center().x() - dotSize / 2.0,
+            rect.center().y() - dotSize / 2.0,
+            dotSize,
+            dotSize);
+
+        painter.drawEllipse(dotRect);
     }
 
-    painter.fillPath(path, textColor);
+    painter.setFont(font);
+    painter.setPen(textColor);
+    painter.setRenderHint(QPainter::TextAntialiasing, true);
+    painter.drawText(rect, Qt::AlignCenter, symbol);
 
     painter.restore();
 }
