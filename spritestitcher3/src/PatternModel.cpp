@@ -525,13 +525,21 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
     painter.setRenderHint(QPainter::TextAntialiasing, true);
     painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
 
-    const QRect content = writer.pageLayout().paintRectPixels(dpi);
+    const QRect rawContent = writer.pageLayout().paintRectPixels(dpi);
+    const int pageSafetyInset = pointsToPixels(18, dpi);
+    const int pageBottomSafetyInset = pointsToPixels(24, dpi);
+    const QRect content = rawContent.adjusted(
+        pageSafetyInset,
+        0,
+        -pageSafetyInset,
+        -pageBottomSafetyInset);
     const int gap = pointsToPixels(10, dpi);
     const int smallGap = pointsToPixels(5, dpi);
     const int contentBottom = content.top() + content.height();
     const int chartHorizontalInset = pointsToPixels(8, dpi);
     const int chartTopInset = pointsToPixels(8, dpi);
     const int chartBottomInset = pointsToPixels(18, dpi);
+    const int legendBottomPadding = pointsToPixels(24, dpi);
     int y = content.top();
 
     auto scaledChartSize = [&](int maxWidth, int maxHeight) {
@@ -734,21 +742,65 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
         }
     };
 
-    auto legendColumnWidths = [](int tableWidth) {
-        const int symbolWidth = tableWidth * 12 / 100;
-        const int swatchWidth = tableWidth * 14 / 100;
-        const int codeWidth = tableWidth * 16 / 100;
-        const int countWidth = tableWidth * 16 / 100;
-        const int nameWidth = tableWidth - symbolWidth - swatchWidth - codeWidth - countWidth;
-        return QVector<int>{symbolWidth, swatchWidth, codeWidth, nameWidth, countWidth};
-    };
-
     QStringList headers{
         QStringLiteral("Symbol"),
         QStringLiteral("Swatch"),
         QStringLiteral("DMC Code"),
         QStringLiteral("DMC Name"),
         QStringLiteral("Stitch Count")
+    };
+
+    auto preferredLegendColumnWidths = [&]() {
+        const QFontMetrics headerMetrics(legendHeaderFont);
+        const QFontMetrics rowMetrics(legendRowFont);
+        const int horizontalPadding = pointsToPixels(8, dpi);
+        const int swatchPadding = pointsToPixels(12, dpi);
+
+        int symbolWidth = headerMetrics.horizontalAdvance(headers.value(0)) + horizontalPadding * 2;
+        int swatchWidth = headerMetrics.horizontalAdvance(headers.value(1)) + horizontalPadding * 2;
+        int codeWidth = headerMetrics.horizontalAdvance(headers.value(2)) + horizontalPadding * 2;
+        int nameWidth = headerMetrics.horizontalAdvance(headers.value(3)) + horizontalPadding * 2;
+        int countWidth = headerMetrics.horizontalAdvance(headers.value(4)) + horizontalPadding * 2;
+
+        swatchWidth = std::max(swatchWidth, rowHeight + swatchPadding);
+
+        for (const PatternMatchedColor &matched : matchedColors) {
+            symbolWidth = std::max(symbolWidth, rowMetrics.horizontalAdvance(matched.symbol) + horizontalPadding * 2);
+            codeWidth = std::max(codeWidth, rowMetrics.horizontalAdvance(matched.dmc.number) + horizontalPadding * 2);
+            nameWidth = std::max(nameWidth, rowMetrics.horizontalAdvance(matched.dmc.name) + horizontalPadding * 2);
+            countWidth = std::max(countWidth, rowMetrics.horizontalAdvance(QString::number(matched.stitchCount)) + horizontalPadding * 2);
+        }
+
+        return QVector<int>{symbolWidth, swatchWidth, codeWidth, nameWidth, countWidth};
+    };
+
+    auto legendColumnWidths = [&](int maxTableWidth) {
+        QVector<int> widths = preferredLegendColumnWidths();
+
+        int totalWidth = 0;
+        for (int width : widths) {
+            totalWidth += width;
+        }
+
+        if (maxTableWidth <= 0 || totalWidth <= maxTableWidth) {
+            return widths;
+        }
+
+        const int fixedWidth = widths[0] + widths[1] + widths[2] + widths[4];
+        const int minNameWidth = QFontMetrics(legendHeaderFont).horizontalAdvance(headers.value(3))
+            + pointsToPixels(16, dpi);
+
+        widths[3] = std::max(minNameWidth, maxTableWidth - fixedWidth);
+        return widths;
+    };
+
+    auto legendTableWidth = [&](int maxTableWidth) {
+        const QVector<int> widths = legendColumnWidths(maxTableWidth);
+        int totalWidth = 0;
+        for (int width : widths) {
+            totalWidth += width;
+        }
+        return std::min(maxTableWidth, totalWidth);
     };
 
     auto drawRow = [&](const QRect &tableArea, int &rowY, const QStringList &values, const QColor &swatchColor, bool header) {
@@ -795,7 +847,7 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
 
     auto drawLegendHeader = [&](const QRect &tableArea, int &rowY, bool continued) -> bool {
         const int requiredHeight = legendTitleHeight + smallGap + rowHeight;
-        if (rowY + requiredHeight > tableArea.bottom() + 1) {
+        if (rowY + requiredHeight > tableArea.bottom()) {
             return false;
         }
         painter.setFont(legendTitleFont);
@@ -810,15 +862,21 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
     };
 
     auto drawLegendRows = [&](const QRect &tableArea, int startIndex, bool continued) {
-        int legendY = tableArea.top();
-        if (!drawLegendHeader(tableArea, legendY, continued)) {
+        const QRect actualTableArea(
+            tableArea.left(),
+            tableArea.top(),
+            legendTableWidth(tableArea.width()),
+            tableArea.height());
+
+        int legendY = actualTableArea.top();
+        if (!drawLegendHeader(actualTableArea, legendY, continued)) {
             return startIndex;
         }
 
         int legendIndex = startIndex;
-        while (legendIndex < matchedColors.size() && legendY + rowHeight <= tableArea.bottom() + 1) {
+        while (legendIndex < matchedColors.size() && legendY + rowHeight <= actualTableArea.bottom()) {
             const PatternMatchedColor &matched = matchedColors[legendIndex];
-            drawRow(tableArea, legendY, {
+            drawRow(actualTableArea, legendY, {
                 matched.symbol,
                 QString(),
                 matched.dmc.number,
@@ -876,7 +934,7 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
         int legendIndex = startIndex;
         bool drewPage = false;
         while (legendIndex < matchedColors.size() || !drewPage) {
-            const QRect legendArea(content.left(), content.top(), content.width(), content.height());
+            const QRect legendArea(content.left(), content.top(), content.width(), std::max(1, content.height() - legendBottomPadding));
             const int nextLegendIndex = drawLegendRows(legendArea, legendIndex, continued || legendIndex > startIndex);
             drewPage = true;
             if (matchedColors.isEmpty()) {
@@ -903,7 +961,7 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
     const int fullLegendHeight = legendTitleHeight + smallGap + rowHeight * (matchedColors.size() + 1);
 
     auto drawChartWithBestLegend = [&](const QString &heading, ChartMode chartMode, int pageTop, double minReadableCell) {
-        const QRect pageArea(content.left(), pageTop, content.width(), contentBottom - pageTop);
+        const QRect pageArea(content.left(), pageTop, content.width(), std::max(1, contentBottom - pageTop - legendBottomPadding));
         const int maxSideLegendWidth = pageArea.width() - gap - minChartWidth;
 
         if (maxSideLegendWidth >= minSideLegendWidth) {
