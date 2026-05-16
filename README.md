@@ -118,3 +118,13 @@ Saved settings intentionally still use the old internal settings name for now so
 - Added Pattern Keeper-friendly thread key pages.
 - Added expanded DMC support.
 - Added selectable chart symbol styles.
+
+## SpriteStitcher 3 development build
+
+SpriteStitcher 3 is the current development prototype.
+
+### Build and run SpriteStitcher 3
+
+```bash
+./scripts/build-linux-v3.sh
+./build/spritestitcher3-release/SpriteStitcher3
