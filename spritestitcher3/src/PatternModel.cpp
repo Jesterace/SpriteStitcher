@@ -1447,6 +1447,7 @@ QString PatternModel::symbolForIndex(int index) {
     if (index < 0) return QString();
 
     static const QStringList symbols{
+        // Simple shape symbols first. These are easy to read in printed/PDF charts.
         QStringLiteral("●"),
         QStringLiteral("○"),
         QStringLiteral("■"),
@@ -1462,31 +1463,43 @@ QString PatternModel::symbolForIndex(int index) {
         QStringLiteral("="),
         QStringLiteral("#"),
         QStringLiteral("*"),
-        QStringLiteral("★"),
-        QStringLiteral("☆"),
-        QStringLiteral("✚"),
-        QStringLiteral("✦"),
-        QStringLiteral("✧"),
-        QStringLiteral("◐"),
-        QStringLiteral("◑"),
-        QStringLiteral("◒"),
-        QStringLiteral("◓"),
-        QStringLiteral("◢"),
-        QStringLiteral("◣"),
-        QStringLiteral("◤"),
-        QStringLiteral("◥"),
-        QStringLiteral("◧"),
-        QStringLiteral("◨"),
-        QStringLiteral("◩"),
-        QStringLiteral("◪"),
-        QStringLiteral("◫"),
-        QStringLiteral("⊕"),
-        QStringLiteral("⊗"),
-        QStringLiteral("⊙"),
-        QStringLiteral("⊡"),
-        QStringLiteral("⊞"),
-        QStringLiteral("◈"),
-        QStringLiteral("▣")
+
+        // Letters chosen to avoid common chart confusion:
+        // no I, no O, and no lowercase letters.
+        QStringLiteral("A"),
+        QStringLiteral("B"),
+        QStringLiteral("C"),
+        QStringLiteral("D"),
+        QStringLiteral("E"),
+        QStringLiteral("F"),
+        QStringLiteral("G"),
+        QStringLiteral("H"),
+        QStringLiteral("J"),
+        QStringLiteral("K"),
+        QStringLiteral("L"),
+        QStringLiteral("M"),
+        QStringLiteral("N"),
+        QStringLiteral("P"),
+        QStringLiteral("Q"),
+        QStringLiteral("R"),
+        QStringLiteral("S"),
+        QStringLiteral("T"),
+        QStringLiteral("U"),
+        QStringLiteral("V"),
+        QStringLiteral("W"),
+        QStringLiteral("X"),
+        QStringLiteral("Y"),
+        QStringLiteral("Z"),
+
+        // Digits chosen to avoid 0/O and 1/I confusion.
+        QStringLiteral("2"),
+        QStringLiteral("3"),
+        QStringLiteral("4"),
+        QStringLiteral("5"),
+        QStringLiteral("6"),
+        QStringLiteral("7"),
+        QStringLiteral("8"),
+        QStringLiteral("9")
     };
 
     if (index < symbols.size()) {
