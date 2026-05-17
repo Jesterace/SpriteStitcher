@@ -9,7 +9,7 @@ Build and run SpriteStitcher 3 with:
 
     ./run-spritestitcher3.sh
 
-The top-level src/ directory is legacy code and should not be edited for SpriteStitcher 3 work unless intentionally doing legacy cleanup.
+The old SpriteStitcher 2.9.6 source has been archived under legacy/spritestitcher-2.9.6/ and should not be edited for SpriteStitcher 3 work unless intentionally doing legacy cleanup.
 
 # SpriteStitcher v2.9.6
 
