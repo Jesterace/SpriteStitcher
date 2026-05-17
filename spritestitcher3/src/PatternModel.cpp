@@ -725,11 +725,15 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
                          Qt::AlignLeft | Qt::AlignVCenter,
                          QStringLiteral("Cut size includes 2 in border on each side"));
 
+        auto roundUpToHalfInch = [](double value) {
+            return std::ceil(value * 2.0) / 2.0;
+        };
+
         auto fabricPlanningLine = [&](int fabricCount) {
             const double finishedW = static_cast<double>(imageWidth) / fabricCount;
             const double finishedH = static_cast<double>(imageHeight) / fabricCount;
-            const double cutW = finishedW + 4.0;
-            const double cutH = finishedH + 4.0;
+            const double cutW = roundUpToHalfInch(finishedW + 4.0);
+            const double cutH = roundUpToHalfInch(finishedH + 4.0);
 
             return QStringLiteral("%1ct: %2 x %3 in / cut %4 x %5 in")
                 .arg(fabricCount)
