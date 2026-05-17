@@ -577,17 +577,21 @@ void MainWindow::showPattern(const QString &path, const QImage &image, const Pat
     m_pathLabel->setText(m_currentImagePath);
     m_sizeLabel->setText(QStringLiteral("Size: %1 x %2 px / stitches").arg(model.imageWidth).arg(model.imageHeight));
 
+    auto roundUpToHalfInch = [](double value) {
+        return std::ceil(value * 2.0) / 2.0;
+    };
+
     auto fabricPlanningLine = [&](int fabricCount) {
         const double finishedW = static_cast<double>(model.imageWidth) / fabricCount;
         const double finishedH = static_cast<double>(model.imageHeight) / fabricCount;
-        const double cutW = finishedW + 4.0;
-        const double cutH = finishedH + 4.0;
+        const double cutW = roundUpToHalfInch(finishedW + 4.0);
+        const double cutH = roundUpToHalfInch(finishedH + 4.0);
         return QStringLiteral("%1ct: %2 x %3 in finished / %4 x %5 in cut with 2\\\" border")
             .arg(fabricCount)
             .arg(finishedW, 0, 'f', 2)
             .arg(finishedH, 0, 'f', 2)
-            .arg(cutW, 0, 'f', 2)
-            .arg(cutH, 0, 'f', 2);
+            .arg(cutW, 0, 'f', 1)
+            .arg(cutH, 0, 'f', 1);
     };
 
     m_fabricPlanningLabel->setText(QStringLiteral("Fabric planning:\n%1\n%2\n%3")
