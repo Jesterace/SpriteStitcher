@@ -72,14 +72,19 @@ bool editPdfExportOptions(QWidget *parent, PdfExportOptions *options) {
 
     auto *layout = new QVBoxLayout(&dialog);
 
-    auto *sectionsBox = new QGroupBox(QStringLiteral("Sections"), &dialog);
+    auto *sectionsBox = new QGroupBox(QStringLiteral("PDF sections to include"), &dialog);
     auto *sectionsLayout = new QVBoxLayout(sectionsBox);
 
-    auto *patternInfoCheck = new QCheckBox(QStringLiteral("Include pattern info / cover page"), sectionsBox);
-    auto *legendCheck = new QCheckBox(QStringLiteral("Include legend"), sectionsBox);
-    auto *colorOverviewCheck = new QCheckBox(QStringLiteral("Include color overview page"), sectionsBox);
-    auto *blackAndWhiteCheck = new QCheckBox(QStringLiteral("Include black-and-white symbol chart"), sectionsBox);
-    auto *tiledColorCheck = new QCheckBox(QStringLiteral("Include tiled color chart"), sectionsBox);
+    auto *patternInfoCheck = new QCheckBox(QStringLiteral("Pattern info / cover page"), sectionsBox);
+    auto *legendCheck = new QCheckBox(QStringLiteral("Legend / thread key pages"), sectionsBox);
+    auto *colorOverviewCheck = new QCheckBox(QStringLiteral("Color overview page"), sectionsBox);
+    auto *blackAndWhiteCheck = new QCheckBox(QStringLiteral("Black-and-white symbol chart"), sectionsBox);
+    auto *tiledColorCheck = new QCheckBox(QStringLiteral("Printable tiled color chart"), sectionsBox);
+
+    auto *sectionsHelp = new QLabel(
+        QStringLiteral("Choose which pages are written to the PDF. For most patterns, keep the symbol chart, color chart, and legend enabled."),
+        sectionsBox);
+    sectionsHelp->setWordWrap(true);
 
     patternInfoCheck->setChecked(options->includePatternInfo);
     legendCheck->setChecked(options->includeLegend);
@@ -87,6 +92,7 @@ bool editPdfExportOptions(QWidget *parent, PdfExportOptions *options) {
     blackAndWhiteCheck->setChecked(options->includeBlackAndWhiteSymbolChart);
     tiledColorCheck->setChecked(options->includeTiledColorChart);
 
+    sectionsLayout->addWidget(sectionsHelp);
     sectionsLayout->addWidget(patternInfoCheck);
     sectionsLayout->addWidget(legendCheck);
     sectionsLayout->addWidget(colorOverviewCheck);
