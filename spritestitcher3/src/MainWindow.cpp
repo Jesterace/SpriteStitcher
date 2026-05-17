@@ -452,10 +452,13 @@ void MainWindow::exportPdf() {
     progress.close();
     m_exportPdfButton->setEnabled(true);
 
+    const QFileInfo exportedPdfInfo(path);
     QMessageBox::information(
         this,
         QStringLiteral("Export PDF"),
-        QStringLiteral("PDF exported:\n%1").arg(QDir::toNativeSeparators(path)));
+        QStringLiteral("PDF exported successfully.\n\nFile:\n%1\n\nFolder:\n%2\n\nThe PDF includes the selected chart sections and legend pages.")
+            .arg(QDir::toNativeSeparators(path))
+            .arg(QDir::toNativeSeparators(exportedPdfInfo.absolutePath())));
 }
 
 void MainWindow::loadImage(const QString &path) {
