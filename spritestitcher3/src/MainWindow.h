@@ -42,6 +42,7 @@ private:
     QPushButton *m_exportPdfButton = nullptr;
     QLabel *m_pathLabel = nullptr;
     QLabel *m_sizeLabel = nullptr;
+    QLabel *m_fabricPlanningLabel = nullptr;
     QLabel *m_colorCountLabel = nullptr;
     QLabel *m_transparentCountLabel = nullptr;
     QCheckBox *m_backgroundTransparentCheckBox = nullptr;

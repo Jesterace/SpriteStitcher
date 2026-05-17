@@ -189,6 +189,9 @@ void MainWindow::buildUi() {
 
     m_sizeLabel = new QLabel(QStringLiteral("Size: -"), summaryBox);
     m_sizeLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    m_fabricPlanningLabel = new QLabel(QStringLiteral("Fabric planning: -"), summaryBox);
+    m_fabricPlanningLabel->setWordWrap(true);
+    m_fabricPlanningLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_colorCountLabel = new QLabel(QStringLiteral("Unique colors: -"), summaryBox);
     m_colorCountLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_transparentCountLabel = new QLabel(QStringLiteral("Transparent/background pixels: -"), summaryBox);
@@ -208,6 +211,7 @@ void MainWindow::buildUi() {
     backgroundColorLayout->addWidget(m_backgroundColorLabel, 1);
 
     summaryLayout->addWidget(m_sizeLabel);
+    summaryLayout->addWidget(m_fabricPlanningLabel);
     summaryLayout->addWidget(m_colorCountLabel);
     summaryLayout->addWidget(m_transparentCountLabel);
     summaryLayout->addWidget(m_backgroundTransparentCheckBox);
@@ -571,7 +575,25 @@ void MainWindow::showPattern(const QString &path, const QImage &image, const Pat
     m_exportPdfButton->setEnabled(true);
 
     m_pathLabel->setText(m_currentImagePath);
-    m_sizeLabel->setText(QStringLiteral("Size: %1 x %2 px").arg(model.imageWidth).arg(model.imageHeight));
+    m_sizeLabel->setText(QStringLiteral("Size: %1 x %2 px / stitches").arg(model.imageWidth).arg(model.imageHeight));
+
+    auto fabricPlanningLine = [&](int fabricCount) {
+        const double finishedW = static_cast<double>(model.imageWidth) / fabricCount;
+        const double finishedH = static_cast<double>(model.imageHeight) / fabricCount;
+        const double cutW = finishedW + 4.0;
+        const double cutH = finishedH + 4.0;
+        return QStringLiteral("%1ct: %2 x %3 in finished / %4 x %5 in cut with 2\\\" border")
+            .arg(fabricCount)
+            .arg(finishedW, 0, 'f', 2)
+            .arg(finishedH, 0, 'f', 2)
+            .arg(cutW, 0, 'f', 2)
+            .arg(cutH, 0, 'f', 2);
+    };
+
+    m_fabricPlanningLabel->setText(QStringLiteral("Fabric planning:\n%1\n%2\n%3")
+                                       .arg(fabricPlanningLine(14),
+                                            fabricPlanningLine(16),
+                                            fabricPlanningLine(18)));
     m_colorCountLabel->setText(QStringLiteral("Unique stitch colors: %1, matched DMC colors: %2")
                                    .arg(model.uniqueSpriteColorCount())
                                    .arg(model.matchedColorCount()));
@@ -716,6 +738,9 @@ void MainWindow::clearImage(const QString &message) {
     m_exportPdfButton->setEnabled(false);
     m_pathLabel->setText(message);
     m_sizeLabel->setText(QStringLiteral("Size: -"));
+    if (m_fabricPlanningLabel) {
+        m_fabricPlanningLabel->setText(QStringLiteral("Fabric planning: -"));
+    }
     m_colorCountLabel->setText(QStringLiteral("Unique colors: -"));
     m_transparentCountLabel->setText(QStringLiteral("Transparent/background pixels: -"));
     m_colorTable->clearContents();
