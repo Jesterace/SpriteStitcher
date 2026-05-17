@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_NAME="SpriteStitcher3"
-VERSION="3.0.0-dev2"
+VERSION="3.0.0-dev3"
 APPIMAGE_NAME="${APP_NAME}-v${VERSION}-x86_64.AppImage"
 
 cd "$(dirname "$0")/.."
