@@ -1,3 +1,16 @@
+# SpriteStitcher 3 source tree note
+
+Active SpriteStitcher 3 development lives in:
+
+- spritestitcher3/
+- spritestitcher3/src/
+
+Build and run SpriteStitcher 3 with:
+
+    ./run-spritestitcher3.sh
+
+The top-level src/ directory is legacy code and should not be edited for SpriteStitcher 3 work unless intentionally doing legacy cleanup.
+
 # SpriteStitcher v2.9.6
 
 SpriteStitcher is a Qt/C++ desktop app for turning sprite images into cross-stitch pattern files.
