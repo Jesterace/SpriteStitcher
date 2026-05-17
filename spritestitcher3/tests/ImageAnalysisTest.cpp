@@ -686,7 +686,8 @@ int main(int argc, char *argv[]) {
     if (pdfBytes.contains("PDF layout:") ||
         pdfBytes.contains("Blank cells are unstitched background.") ||
         pdfBytes.contains("Grid labels appear every 10 stitches.") ||
-        pdfBytes.contains("v2.9.5")) {
+        pdfBytes.contains("v2.9.5") ||
+        pdfBytes.contains("v2.9.6")) {
         return fail(QStringLiteral("Pattern PDF should not contain legacy debug/status text."));
     }
     if (pdfBytes.contains("/Subtype /Image") || pdfBytes.contains("/Subtype/Image")) {
