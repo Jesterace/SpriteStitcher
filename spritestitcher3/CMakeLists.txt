@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(SpriteStitcher3Prototype VERSION 0.1.0 LANGUAGES CXX)
+project(SpriteStitcher3Prototype VERSION 3.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -27,7 +27,7 @@ add_executable(SpriteStitcher3
 )
 
 target_link_libraries(SpriteStitcher3 PRIVATE SpriteStitcher3Core Qt6::Widgets)
-target_compile_definitions(SpriteStitcher3 PRIVATE APP_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(SpriteStitcher3 PRIVATE APP_VERSION="${PROJECT_VERSION}-dev2")
 
 add_executable(SpriteStitcher3ImageAnalysisTest
     tests/ImageAnalysisTest.cpp
