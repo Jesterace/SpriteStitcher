@@ -378,14 +378,29 @@ void MainWindow::exportPdf() {
         return;
     }
 
+    auto pdfExportSuffix = []() {
+        QString version = QApplication::applicationVersion();
+        if (version.isEmpty()) {
+            version = QStringLiteral("3.0.0-dev2");
+        }
+
+        QString suffix = QStringLiteral("_cross_stitch_v") + version;
+        for (int i = 0; i < suffix.size(); ++i) {
+            if (!suffix.at(i).isLetterOrNumber()) {
+                suffix[i] = QLatin1Char('_');
+            }
+        }
+        return suffix;
+    };
+
     QString defaultDirectory;
-    QString defaultFileName = QStringLiteral("spritestitcher3_pattern.pdf");
+    QString defaultFileName = QStringLiteral("spritestitcher3") + pdfExportSuffix() + QStringLiteral(".pdf");
     QString imageName = QStringLiteral("Untitled Sprite");
     if (!m_currentImagePath.isEmpty()) {
         const QFileInfo info(m_currentImagePath);
         imageName = info.completeBaseName();
         defaultDirectory = info.dir().absolutePath();
-        defaultFileName = info.completeBaseName() + QStringLiteral(".pdf");
+        defaultFileName = info.completeBaseName() + pdfExportSuffix() + QStringLiteral(".pdf");
     }
 
     PdfExportOptions pdfOptions;
