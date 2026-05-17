@@ -318,10 +318,25 @@ void MainWindow::exportCsv() {
         return;
     }
 
-    QString defaultPath = QStringLiteral("spritestitcher3_palette.csv");
+    auto exportVersionSuffix = []() {
+        QString version = QApplication::applicationVersion();
+        if (version.isEmpty()) {
+            version = QStringLiteral("3.0.0-dev2");
+        }
+
+        QString suffix = QStringLiteral("_v") + version;
+        for (int i = 0; i < suffix.size(); ++i) {
+            if (!suffix.at(i).isLetterOrNumber()) {
+                suffix[i] = QLatin1Char('_');
+            }
+        }
+        return suffix;
+    };
+
+    QString defaultPath = QStringLiteral("spritestitcher3_palette") + exportVersionSuffix() + QStringLiteral(".csv");
     if (!m_currentImagePath.isEmpty()) {
         const QFileInfo info(m_currentImagePath);
-        defaultPath = info.dir().filePath(info.completeBaseName() + QStringLiteral("_spritestitcher3.csv"));
+        defaultPath = info.dir().filePath(info.completeBaseName() + QStringLiteral("_palette") + exportVersionSuffix() + QStringLiteral(".csv"));
     }
 
     QString path = QFileDialog::getSaveFileName(
@@ -357,10 +372,25 @@ void MainWindow::exportChartPng() {
         return;
     }
 
-    QString defaultPath = QStringLiteral("spritestitcher3_chart.png");
+    auto exportVersionSuffix = []() {
+        QString version = QApplication::applicationVersion();
+        if (version.isEmpty()) {
+            version = QStringLiteral("3.0.0-dev2");
+        }
+
+        QString suffix = QStringLiteral("_v") + version;
+        for (int i = 0; i < suffix.size(); ++i) {
+            if (!suffix.at(i).isLetterOrNumber()) {
+                suffix[i] = QLatin1Char('_');
+            }
+        }
+        return suffix;
+    };
+
+    QString defaultPath = QStringLiteral("spritestitcher3_chart") + exportVersionSuffix() + QStringLiteral(".png");
     if (!m_currentImagePath.isEmpty()) {
         const QFileInfo info(m_currentImagePath);
-        defaultPath = info.dir().filePath(info.completeBaseName() + QStringLiteral("_spritestitcher3_chart.png"));
+        defaultPath = info.dir().filePath(info.completeBaseName() + QStringLiteral("_chart") + exportVersionSuffix() + QStringLiteral(".png"));
     }
 
     QString path = QFileDialog::getSaveFileName(
