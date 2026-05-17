@@ -224,9 +224,9 @@ void MainWindow::buildUi() {
     chartControlsLayout->setContentsMargins(0, 0, 0, 0);
     chartControlsLayout->addWidget(new QLabel(QStringLiteral("Mode:"), chartControls));
     m_chartModeCombo = new QComboBox(chartControls);
-    m_chartModeCombo->addItem(QStringLiteral("Color + Symbols"), static_cast<int>(ChartMode::ColorAndSymbols));
-    m_chartModeCombo->addItem(QStringLiteral("Symbols Only"), static_cast<int>(ChartMode::SymbolsOnly));
-    m_chartModeCombo->addItem(QStringLiteral("Colors Only"), static_cast<int>(ChartMode::ColorsOnly));
+    m_chartModeCombo->addItem(QStringLiteral("Color chart + symbols"), static_cast<int>(ChartMode::ColorAndSymbols));
+    m_chartModeCombo->addItem(QStringLiteral("Symbol chart only"), static_cast<int>(ChartMode::SymbolsOnly));
+    m_chartModeCombo->addItem(QStringLiteral("Color chart only"), static_cast<int>(ChartMode::ColorsOnly));
     chartControlsLayout->addWidget(m_chartModeCombo);
     chartControlsLayout->addWidget(new QLabel(QStringLiteral("Zoom:"), chartControls));
     m_chartZoomCombo = new QComboBox(chartControls);
