@@ -27,7 +27,7 @@ add_executable(SpriteStitcher3
 )
 
 target_link_libraries(SpriteStitcher3 PRIVATE SpriteStitcher3Core Qt6::Widgets)
-target_compile_definitions(SpriteStitcher3 PRIVATE APP_VERSION="${PROJECT_VERSION}-dev4")
+target_compile_definitions(SpriteStitcher3 PRIVATE APP_VERSION="${PROJECT_VERSION}-dev5")
 
 add_executable(SpriteStitcher3ImageAnalysisTest
     tests/ImageAnalysisTest.cpp
