@@ -342,7 +342,13 @@ void MainWindow::exportCsv() {
         return;
     }
 
-    QMessageBox::information(this, QStringLiteral("Export CSV"), QStringLiteral("CSV exported."));
+    const QFileInfo exportedCsvInfo(path);
+    QMessageBox::information(
+        this,
+        QStringLiteral("Export CSV"),
+        QStringLiteral("CSV exported successfully.\n\nFile:\n%1\n\nFolder:\n%2")
+            .arg(QDir::toNativeSeparators(path))
+            .arg(QDir::toNativeSeparators(exportedCsvInfo.absolutePath())));
 }
 
 void MainWindow::exportChartPng() {
@@ -375,7 +381,13 @@ void MainWindow::exportChartPng() {
         return;
     }
 
-    QMessageBox::information(this, QStringLiteral("Export Chart PNG"), QStringLiteral("Chart PNG exported."));
+    const QFileInfo exportedPngInfo(path);
+    QMessageBox::information(
+        this,
+        QStringLiteral("Export Chart PNG"),
+        QStringLiteral("Chart PNG exported successfully.\n\nFile:\n%1\n\nFolder:\n%2")
+            .arg(QDir::toNativeSeparators(path))
+            .arg(QDir::toNativeSeparators(exportedPngInfo.absolutePath())));
 }
 
 void MainWindow::exportPdf() {
