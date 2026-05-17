@@ -720,10 +720,29 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
                          Qt::AlignLeft | Qt::AlignVCenter,
                          QStringLiteral("Total stitch count: %1").arg(opaqueStitchPixels));
 
+        painter.drawText(QRect(leftRect.left(), leftRect.top() + 2 * (bodyHeight + summaryLineGap),
+                               leftRect.width(), bodyHeight),
+                         Qt::AlignLeft | Qt::AlignVCenter,
+                         QStringLiteral("Cut size includes 2 in border on each side"));
+
+        auto fabricPlanningLine = [&](int fabricCount) {
+            const double finishedW = static_cast<double>(imageWidth) / fabricCount;
+            const double finishedH = static_cast<double>(imageHeight) / fabricCount;
+            const double cutW = finishedW + 4.0;
+            const double cutH = finishedH + 4.0;
+
+            return QStringLiteral("%1ct: %2 x %3 in / cut %4 x %5 in")
+                .arg(fabricCount)
+                .arg(formatInches(finishedW),
+                     formatInches(finishedH),
+                     formatInches(cutW),
+                     formatInches(cutH));
+        };
+
         const QStringList fabricLines{
-            finishedSizeText(14),
-            finishedSizeText(16),
-            finishedSizeText(18)
+            fabricPlanningLine(14),
+            fabricPlanningLine(16),
+            fabricPlanningLine(18)
         };
 
         int fabricY = rightRect.top();
