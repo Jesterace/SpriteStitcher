@@ -586,12 +586,16 @@ void MainWindow::showPattern(const QString &path, const QImage &image, const Pat
         const double finishedH = static_cast<double>(model.imageHeight) / fabricCount;
         const double cutW = roundUpToHalfInch(finishedW + 4.0);
         const double cutH = roundUpToHalfInch(finishedH + 4.0);
-        return QStringLiteral("%1ct: %2 x %3 in finished / %4 x %5 in cut with 2\\\" border")
+        const double cutCmW = cutW * 2.54;
+        const double cutCmH = cutH * 2.54;
+        return QStringLiteral("%1ct: %2 x %3 in finished / %4 x %5 in cut (%6 x %7 cm)")
             .arg(fabricCount)
             .arg(finishedW, 0, 'f', 2)
             .arg(finishedH, 0, 'f', 2)
             .arg(cutW, 0, 'f', 1)
-            .arg(cutH, 0, 'f', 1);
+            .arg(cutH, 0, 'f', 1)
+            .arg(cutCmW, 0, 'f', 1)
+            .arg(cutCmH, 0, 'f', 1);
     };
 
     m_fabricPlanningLabel->setText(QStringLiteral("Fabric planning:\n%1\n%2\n%3")

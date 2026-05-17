@@ -734,13 +734,17 @@ bool PatternModel::writePdfFile(const QString &path, const QString &imageName, i
             const double finishedH = static_cast<double>(imageHeight) / fabricCount;
             const double cutW = roundUpToHalfInch(finishedW + 4.0);
             const double cutH = roundUpToHalfInch(finishedH + 4.0);
+            const double cutCmW = cutW * 2.54;
+            const double cutCmH = cutH * 2.54;
 
-            return QStringLiteral("%1ct: %2 x %3 in / cut %4 x %5 in")
+            return QStringLiteral("%1ct: %2 x %3 in / cut %4 x %5 in (%6 x %7 cm)")
                 .arg(fabricCount)
                 .arg(formatInches(finishedW),
                      formatInches(finishedH),
                      formatInches(cutW),
-                     formatInches(cutH));
+                     formatInches(cutH))
+                .arg(cutCmW, 0, 'f', 1)
+                .arg(cutCmH, 0, 'f', 1);
         };
 
         const QStringList fabricLines{
