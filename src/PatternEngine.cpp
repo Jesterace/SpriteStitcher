@@ -1387,7 +1387,7 @@ bool PatternEngine::renderPdf(const QString &pdfPath,
     const int pageW = pdf.width();
     const int pageH = pdf.height();
     const int margin = 90;
-    const int headerH = 285;
+    const int headerH = 190;
     const int footerH = 55;
     const bool useCompactLegend = options.legendPlacement == PatternOptions::LegendPlacement::SamePageWhenPossible && colors.size() <= 12;
     const int compactLegendH = useCompactLegend ? 300 : 0;
@@ -1448,15 +1448,6 @@ bool PatternEngine::renderPdf(const QString &pdfPath,
                 .arg(w16, 0, 'f', 2).arg(h16, 0, 'f', 2)
                 .arg(w18, 0, 'f', 2).arg(h18, 0, 'f', 2);
         p.drawText(QRect(margin, margin + 115, pageW - margin * 2, 45), Qt::AlignLeft | Qt::AlignVCenter, sizes);
-        QString layout = QString("PDF layout: grid %1 | legend %2 | page %3 | center lines %4 | symbols %5 | v2.9.7")
-                .arg(gridSizeName())
-                .arg(legendPlacementName())
-                .arg(orientationName())
-                .arg(options.drawCenterLines ? QStringLiteral("on") : QStringLiteral("off"))
-                .arg(options.symbolStyle == PatternOptions::SymbolStyle::Classic ? QStringLiteral("classic") : options.symbolStyle == PatternOptions::SymbolStyle::SimpleIcons ? QStringLiteral("icon") : QStringLiteral("clean"));
-        p.drawText(QRect(margin, margin + 165, pageW - margin * 2, 45), Qt::AlignLeft | Qt::AlignVCenter, layout);
-        p.drawText(QRect(margin, margin + 210, pageW - margin * 2, 45), Qt::AlignLeft | Qt::AlignVCenter,
-                   "Blank cells are unstitched background. Grid labels appear every 10 stitches.");
     };
 
     auto drawCompactLegend = [&](int topY) {
