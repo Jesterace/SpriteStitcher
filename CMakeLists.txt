@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(SpriteStitcher VERSION 2.9.6 LANGUAGES CXX)
+project(SpriteStitcher VERSION 2.9.7 LANGUAGES CXX)
 
 include(GNUInstallDirs)
 
