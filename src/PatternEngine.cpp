@@ -1095,19 +1095,37 @@ bool PatternEngine::renderPatternKeeperImportPdf(const QString &pdfPath,
         const int startX = margin + (chartAreaW - gridW) / 2;
         const int startY = margin + headerH;
 
-        QFont symbolFont = p.font();
-        symbolFont.setPointSize(std::max(3, std::min(12, cell / 3)));
-        symbolFont.setBold(true);
-        p.setFont(symbolFont);
+        auto drawFloatingSymbol = [&](const QRect &cellRect, const QString &symbol, const QColor &penColor) {
+            if (cell < 5 || symbol.isEmpty()) return;
+
+            QFont symbolFont = p.font();
+
+            // WinStitch-style PDF symbols:
+            // use pixel sizing relative to the actual chart cell so symbols scale with the grid
+            // and float inside the square instead of touching the cell borders.
+            int symbolPixels = std::max(4, static_cast<int>(std::floor(cell * 0.62)));
+
+            if (symbol.length() > 1) {
+                symbolPixels = std::max(3, static_cast<int>(std::floor(cell * 0.48)));
+            }
+
+            symbolFont.setPixelSize(symbolPixels);
+            symbolFont.setBold(false);
+            p.setFont(symbolFont);
+            p.setPen(penColor);
+
+            const int pad = std::max(1, cell / 8);
+            const QRect textRect = cellRect.adjusted(pad, pad, -pad, -pad);
+            p.drawText(textRect, Qt::AlignCenter, symbol);
+        };
 
         for (int y = 0; y < rows; ++y) {
             for (int x = 0; x < cols; ++x) {
                 const QRect r(startX + x * cell, startY + y * cell, cell, cell);
                 const int idx = grid[y][x].colorIndex;
                 p.fillRect(r, Qt::white);
-                if (idx >= 0 && cell >= 5) {
-                    p.setPen(Qt::black);
-                    p.drawText(r, Qt::AlignCenter, pkColors[idx].symbol);
+                if (idx >= 0) {
+                    drawFloatingSymbol(r, pkColors[idx].symbol, Qt::black);
                 }
             }
         }
@@ -1539,25 +1557,44 @@ bool PatternEngine::renderPdf(const QString &pdfPath,
         const int startX = margin + (chartAreaW - gridW) / 2;
         const int startY = margin + headerH;
 
-        QFont symbolFont = p.font();
-        symbolFont.setPointSize(std::max(3, cell / 4));
-        symbolFont.setBold(true);
-        p.setFont(symbolFont);
+        auto drawFloatingSymbol = [&](const QRect &cellRect, const QString &symbol, const QColor &penColor) {
+            if (cell < 5 || symbol.isEmpty()) return;
+
+            QFont symbolFont = p.font();
+
+            // WinStitch-style PDF symbols:
+            // use pixel sizing relative to the actual chart cell so symbols scale with the grid
+            // and float inside the square instead of touching the cell borders.
+            int symbolPixels = std::max(4, static_cast<int>(std::floor(cell * 0.62)));
+
+            if (symbol.length() > 1) {
+                symbolPixels = std::max(3, static_cast<int>(std::floor(cell * 0.48)));
+            }
+
+            symbolFont.setPixelSize(symbolPixels);
+            symbolFont.setBold(false);
+            p.setFont(symbolFont);
+            p.setPen(penColor);
+
+            const int pad = std::max(1, cell / 8);
+            const QRect textRect = cellRect.adjusted(pad, pad, -pad, -pad);
+            p.drawText(textRect, Qt::AlignCenter, symbol);
+        };
 
         for (int y = 0; y < rows; ++y) {
             for (int x = 0; x < cols; ++x) {
                 const QRect r(startX + x * cell, startY + y * cell, cell, cell);
                 const int idx = grid[y][x].colorIndex;
                 if (idx >= 0) {
+                    QColor symbolColor = Qt::black;
                     if (colorChart) {
                         p.fillRect(r, colors[idx].color);
                         int gray = qGray(colors[idx].color.rgb());
-                        p.setPen(gray < 120 ? Qt::white : Qt::black);
+                        symbolColor = gray < 120 ? Qt::white : Qt::black;
                     } else {
                         p.fillRect(r, Qt::white);
-                        p.setPen(Qt::black);
                     }
-                    if (cell >= 5) p.drawText(r, Qt::AlignCenter, colors[idx].symbol);
+                    drawFloatingSymbol(r, colors[idx].symbol, symbolColor);
                 } else {
                     p.fillRect(r, Qt::white);
                 }
