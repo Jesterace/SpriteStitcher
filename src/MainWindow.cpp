@@ -17,6 +17,7 @@
 #include <QFormLayout>
 #include <QFontMetrics>
 #include <QGroupBox>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QImage>
@@ -254,30 +255,46 @@ void MainWindow::buildUi() {
     topLayout->addWidget(optionsBox);
 
     auto *buttonRow = new QWidget(topPanel);
-    auto *buttonLayout = new QHBoxLayout(buttonRow);
+    auto *buttonLayout = new QGridLayout(buttonRow);
     buttonLayout->setContentsMargins(0, 0, 0, 0);
+    buttonLayout->setHorizontalSpacing(6);
+    buttonLayout->setVerticalSpacing(6);
+
     m_generateButton = new QPushButton("Generate PDF", buttonRow);
-    m_openPdfButton = new QPushButton("Open generated PDF", buttonRow);
+    m_openPdfButton = new QPushButton("Open PDF", buttonRow);
     m_openPdfButton->setEnabled(false);
-    m_openFolderButton = new QPushButton("Open output folder", buttonRow);
+    m_openFolderButton = new QPushButton("Open folder", buttonRow);
     m_reviewPaletteButton = new QPushButton("Edit palette...", buttonRow);
-    auto *saveProjectButton = new QPushButton("Save project...", buttonRow);
-    auto *loadProjectButton = new QPushButton("Load project...", buttonRow);
+    auto *saveProjectButton = new QPushButton("Save project", buttonRow);
+    auto *loadProjectButton = new QPushButton("Load project", buttonRow);
     auto *useWorkFoldersButton = new QPushButton("Use work folders", buttonRow);
     auto *openSpritesButton = new QPushButton("Open sprites", buttonRow);
     auto *openPatternsButton = new QPushButton("Open patterns", buttonRow);
-    auto *resetButton = new QPushButton("Reset saved settings", buttonRow);
-    buttonLayout->addWidget(m_generateButton);
-    buttonLayout->addWidget(m_reviewPaletteButton);
-    buttonLayout->addWidget(saveProjectButton);
-    buttonLayout->addWidget(loadProjectButton);
-    buttonLayout->addWidget(useWorkFoldersButton);
-    buttonLayout->addWidget(openSpritesButton);
-    buttonLayout->addWidget(openPatternsButton);
-    buttonLayout->addWidget(m_openPdfButton);
-    buttonLayout->addWidget(m_openFolderButton);
-    buttonLayout->addStretch(1);
-    buttonLayout->addWidget(resetButton);
+    auto *resetButton = new QPushButton("Reset settings", buttonRow);
+
+    QList<QPushButton*> actionButtons = {
+        m_generateButton,
+        m_reviewPaletteButton,
+        saveProjectButton,
+        loadProjectButton,
+        useWorkFoldersButton,
+        openSpritesButton,
+        openPatternsButton,
+        m_openPdfButton,
+        m_openFolderButton,
+        resetButton
+    };
+
+    int buttonIndex = 0;
+    for (auto *button : actionButtons) {
+        button->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+        buttonLayout->addWidget(button, buttonIndex / 3, buttonIndex % 3);
+        ++buttonIndex;
+    }
+
+    buttonLayout->setColumnStretch(0, 1);
+    buttonLayout->setColumnStretch(1, 1);
+    buttonLayout->setColumnStretch(2, 1);
     topLayout->addWidget(buttonRow);
     topLayout->addStretch(1);
 
