@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QFontMetrics>
 #include <QPageLayout>
 #include <QPageSize>
 #include <QPainter>
@@ -524,17 +525,17 @@ QString PatternEngine::makeSymbol(int index, PatternOptions::SymbolStyle style) 
     static const QStringList classicSymbols = {
         "1","2","3","4","5","6","7","8","9",
         "A","B","C","D","E","F","G","H","J","K","L","M","N","P","Q","R","S","T","U","V","W","X","Y","Z",
-        "●","○","◆","◇","■","□","▲","△","✚","✖","★","☆","♣","♠","♥","♦","+","x","/","\\","=","%","#","@"
+        "●","○","◆","◇","■","□","▲","△","✚","✖","★","☆","♣","♠","♥","♦","x","/","\\","=","%","#","@"
     };
 
     static const QStringList cleanSymbols = {
-        "□","○","●","◆","◇","■","▲","△","+","×","★","☆","♥","♦","♣","♠",
+        "□","○","●","◆","◇","■","▲","△","×","★","☆","♥","♦","♣","♠",
         "⌂","✿","☾","✚","◐","◑","◒","◓","◊","⊙","⊕","⊗","⊞","⊠","◎","◈",
         "A","B","C","D","E","F","G","H","J","K","L","M","N","P","Q","R","S","T","U","V","W","X","Y","Z"
     };
 
     static const QStringList simpleIconSymbols = {
-        "□","○","+","⌂","✿","☾","★","♥","♦","♣","♠","▲","△","◆","◇","■",
+        "□","○","⌂","✿","☾","★","♥","♦","♣","♠","▲","△","◆","◇","■",
         "◐","◑","◒","◓","◎","◈","⊕","⊗","✚","✱","/","\\","=","%","#","@",
         "A","B","C","D","E","F","G","H","J","K","L","M","N","P","Q","R","S","T","U","V","W","X","Y","Z"
     };
@@ -553,7 +554,22 @@ QString PatternEngine::makeSymbol(int index, PatternOptions::SymbolStyle style) 
             break;
     }
 
-    if (index < symbols->size()) return symbols->at(index);
+    static const QStringList badSymbols = {
+        QStringLiteral("+"),
+        QStringLiteral("⌂")
+    };
+
+    int usableIndex = 0;
+    for (const QString &symbol : *symbols) {
+        if (badSymbols.contains(symbol)) continue;
+
+        if (usableIndex == index) {
+            return symbol;
+        }
+
+        ++usableIndex;
+    }
+
     return QString("C%1").arg(index + 1, 2, 10, QChar('0'));
 }
 
@@ -1011,7 +1027,7 @@ static QString makePatternKeeperImportSymbol(int index) {
     // Pattern Keeper can confuse chart symbols like "3" with DMC/thread numbers.
     static const QStringList symbols = {
         "L","Z","U","H","V","A","M","N","T","Y","R","S","K","P","Q","W","X","J",
-        "(","w","<","}","?","r","c","!","+","-","=","/","\\","*","#","@","%",
+        "(","w","<","}","?","r","c","!","-","=","/","\\","*","#","@","%",
         "■","▲","◆","●","○","♥","↑","↓","◇","□","△","★"
     };
     if (index < symbols.size()) return symbols[index];
@@ -1387,10 +1403,11 @@ bool PatternEngine::renderPdf(const QString &pdfPath,
     const int pageW = pdf.width();
     const int pageH = pdf.height();
     const int margin = 90;
-    const int headerH = 190;
     const int footerH = 55;
     const bool useCompactLegend = options.legendPlacement == PatternOptions::LegendPlacement::SamePageWhenPossible && colors.size() <= 12;
     const int compactLegendH = useCompactLegend ? 300 : 0;
+    const QString colorChartType = QStringLiteral("Color chart with symbols");
+    const QString symbolChartType = QStringLiteral("Pattern Keeper-friendly black-and-white symbols");
 
     auto gridSizeName = [&]() -> QString {
         switch (options.gridSize) {
@@ -1422,32 +1439,133 @@ bool PatternEngine::renderPdf(const QString &pdfPath,
         }
     };
 
-    auto drawHeader = [&](const QString &subtitle) {
-        p.setPen(Qt::black);
-        QFont titleFont = p.font();
-        titleFont.setPointSize(18);
-        titleFont.setBold(true);
-        p.setFont(titleFont);
-        p.drawText(QRect(margin, margin, pageW - margin * 2, 55), Qt::AlignLeft | Qt::AlignVCenter, title);
+    QFont titleFont = p.font();
+    titleFont.setPointSize(18);
+    titleFont.setBold(true);
 
-        QFont small = p.font();
-        small.setPointSize(9);
-        small.setBold(false);
-        p.setFont(small);
-        const double w14 = cols / 14.0;
-        const double h14 = rows / 14.0;
-        const double w16 = cols / 16.0;
-        const double h16 = rows / 16.0;
-        const double w18 = cols / 18.0;
-        const double h18 = rows / 18.0;
-        QString info = QString("%1 | Grid: %2 x %3 stitches | Stitched: %4 | Background/unstitched: %5 | Colors: %6")
-                .arg(subtitle).arg(cols).arg(rows).arg(stitched).arg(unstitched).arg(colors.size());
-        p.drawText(QRect(margin, margin + 65, pageW - margin * 2, 45), Qt::AlignLeft | Qt::AlignVCenter, info);
-        QString sizes = QString("Finished size: 14ct %1 x %2 in | 16ct %3 x %4 in | 18ct %5 x %6 in")
-                .arg(w14, 0, 'f', 2).arg(h14, 0, 'f', 2)
-                .arg(w16, 0, 'f', 2).arg(h16, 0, 'f', 2)
-                .arg(w18, 0, 'f', 2).arg(h18, 0, 'f', 2);
-        p.drawText(QRect(margin, margin + 115, pageW - margin * 2, 45), Qt::AlignLeft | Qt::AlignVCenter, sizes);
+    QFont panelHeadingFont = p.font();
+    panelHeadingFont.setPointSize(10);
+    panelHeadingFont.setBold(true);
+
+    QFont panelBodyFont = p.font();
+    panelBodyFont.setPointSize(9);
+    panelBodyFont.setBold(false);
+
+    const double w14 = cols / 14.0;
+    const double h14 = rows / 14.0;
+    const double w16 = cols / 16.0;
+    const double h16 = rows / 16.0;
+    const double w18 = cols / 18.0;
+    const double h18 = rows / 18.0;
+
+    auto chartPanelLines = [&](const QString &chartType) -> QStringList {
+        return {
+            QString("Chart type: %1").arg(chartType),
+            QString("Grid size: %1 x %2 stitches").arg(cols).arg(rows),
+            QString("Stitched count: %1").arg(stitched),
+            QString("Background/unstitched count: %1").arg(unstitched),
+            QString("Color count: %1").arg(colors.size())
+        };
+    };
+
+    auto fabricPanelLines = [&]() -> QStringList {
+        return {
+            QString("14ct size: %1 x %2 in").arg(w14, 0, 'f', 2).arg(h14, 0, 'f', 2),
+            QString("16ct size: %1 x %2 in").arg(w16, 0, 'f', 2).arg(h16, 0, 'f', 2),
+            QString("18ct size: %1 x %2 in").arg(w18, 0, 'f', 2).arg(h18, 0, 'f', 2)
+        };
+    };
+
+    const int panelPaddingX = 26;
+    const int panelPaddingY = 24;
+    const int panelGap = 34;
+    const int titlePanelGap = 28;
+    const int panelGridGap = 92;
+    const int headingBodyGap = 12;
+
+    auto wrappedLineHeight = [&](const QFont &font, const QString &text, int width) -> int {
+        QFontMetrics metrics(font, p.device());
+        const QRect bounds = metrics.boundingRect(QRect(0, 0, width, 10000),
+                                                  Qt::AlignLeft | Qt::TextWordWrap,
+                                                  text);
+        return std::max(metrics.lineSpacing(), bounds.height()) + 4;
+    };
+
+    const int panelW = (pageW - margin * 2 - panelGap) / 2;
+    const int panelTextW = std::max(1, panelW - panelPaddingX * 2);
+
+    auto measurePanelHeight = [&](const QStringList &lines) -> int {
+        QFontMetrics headingMetrics(panelHeadingFont, p.device());
+        int height = panelPaddingY * 2 + headingMetrics.lineSpacing() + headingBodyGap;
+        for (const QString &line : lines) {
+            height += wrappedLineHeight(panelBodyFont, line, panelTextW);
+        }
+        return height;
+    };
+
+    struct ChartHeaderLayout {
+        QRect titleRect;
+        QRect chartPanelRect;
+        QRect fabricPanelRect;
+        int gridTopY;
+    };
+
+    auto makeChartHeaderLayout = [&]() -> ChartHeaderLayout {
+        QFontMetrics titleMetrics(titleFont, p.device());
+        const int titleTextH = titleMetrics.boundingRect(QRect(0, 0, pageW - margin * 2, 10000),
+                                                         Qt::AlignLeft | Qt::TextWordWrap,
+                                                         title).height();
+        const int titleH = std::max(titleMetrics.lineSpacing(), titleTextH) + 18;
+        const int panelTop = margin + titleH + titlePanelGap;
+        const int panelH = std::max({
+            measurePanelHeight(chartPanelLines(colorChartType)),
+            measurePanelHeight(chartPanelLines(symbolChartType)),
+            measurePanelHeight(fabricPanelLines())
+        });
+
+        ChartHeaderLayout layout;
+        layout.titleRect = QRect(margin, margin, pageW - margin * 2, titleH);
+        layout.chartPanelRect = QRect(margin, panelTop, panelW, panelH);
+        layout.fabricPanelRect = QRect(margin + panelW + panelGap, panelTop, panelW, panelH);
+        layout.gridTopY = panelTop + panelH + panelGridGap;
+        return layout;
+    };
+
+    const ChartHeaderLayout chartHeaderLayout = makeChartHeaderLayout();
+
+    auto drawInfoPanel = [&](const QRect &rect, const QString &heading, const QStringList &lines) {
+        p.fillRect(rect, QColor(246, 246, 246));
+        p.setPen(QColor(185, 185, 185));
+        p.drawRect(rect);
+
+        const QRect contentRect = rect.adjusted(panelPaddingX, panelPaddingY, -panelPaddingX, -panelPaddingY);
+        QFontMetrics headingMetrics(panelHeadingFont, p.device());
+
+        p.setPen(Qt::black);
+        p.setFont(panelHeadingFont);
+        p.drawText(QRect(contentRect.x(), contentRect.y(), contentRect.width(), headingMetrics.lineSpacing()),
+                   Qt::AlignLeft | Qt::AlignTop,
+                   heading);
+
+        p.setFont(panelBodyFont);
+        int y = contentRect.y() + headingMetrics.lineSpacing() + headingBodyGap;
+        for (const QString &line : lines) {
+            const int lineH = wrappedLineHeight(panelBodyFont, line, contentRect.width());
+            p.drawText(QRect(contentRect.x(), y, contentRect.width(), lineH),
+                       Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap,
+                       line);
+            y += lineH;
+        }
+    };
+
+    auto drawHeader = [&](const QString &chartType) -> int {
+        p.setPen(Qt::black);
+        p.setFont(titleFont);
+        p.drawText(chartHeaderLayout.titleRect, Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, title);
+
+        drawInfoPanel(chartHeaderLayout.chartPanelRect, QStringLiteral("Chart"), chartPanelLines(chartType));
+        drawInfoPanel(chartHeaderLayout.fabricPanelRect, QStringLiteral("Fabric sizes"), fabricPanelLines());
+        return chartHeaderLayout.gridTopY;
     };
 
     auto drawCompactLegend = [&](int topY) {
@@ -1536,17 +1654,16 @@ bool PatternEngine::renderPdf(const QString &pdfPath,
 
     auto drawChart = [&](bool colorChart) {
         p.fillRect(QRect(0, 0, pageW, pageH), Qt::white);
-        drawHeader(colorChart ? "Color chart with symbols" : "Pattern Keeper-friendly black-and-white symbols");
+        const int startY = drawHeader(colorChart ? colorChartType : symbolChartType);
 
         const int chartAreaW = pageW - margin * 2;
-        const int chartAreaH = std::max(1, pageH - margin * 2 - headerH - footerH - compactLegendH);
+        const int chartAreaH = std::max(1, pageH - startY - margin - footerH - compactLegendH);
         const double fitCell = std::min(chartAreaW / std::max(1.0, static_cast<double>(cols)),
                                         chartAreaH / std::max(1.0, static_cast<double>(rows)));
         const int cell = std::max(1, static_cast<int>(std::floor(std::min(fitCell, static_cast<double>(maxCellForGridSize())))));
         const int gridW = cell * cols;
         const int gridH = cell * rows;
         const int startX = margin + (chartAreaW - gridW) / 2;
-        const int startY = margin + headerH;
 
         auto drawFloatingSymbol = [&](const QRect &cellRect, const QString &symbol, const QColor &penColor) {
             if (cell < 5 || symbol.isEmpty()) return;
