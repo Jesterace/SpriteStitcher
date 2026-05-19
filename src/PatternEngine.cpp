@@ -953,6 +953,24 @@ static QString csvEscape(const QString &value) {
     return '"' + out + '"';
 }
 
+
+static const QString kPdfDisclaimer = QStringLiteral(
+    "Fan-made pattern for personal use only. Not official, sponsored, endorsed, or affiliated with Nintendo, Sega, Capcom, The Pokemon Company, or any other rights holder. Characters, sprites, logos, and trademarks remain property of their respective owners."
+);
+
+static void drawPdfDisclaimer(QPainter &p, int margin, int pageW, int pageH) {
+    QFont disclaimerFont = p.font();
+    disclaimerFont.setPointSize(6);
+    disclaimerFont.setBold(false);
+    p.setFont(disclaimerFont);
+    p.setPen(QColor(90, 90, 90));
+
+    p.drawText(QRect(margin, pageH - margin - 86, pageW - margin * 2, 78),
+               Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap,
+               kPdfDisclaimer);
+}
+
+
 bool PatternEngine::writeLegendCsv(const QString &csvPath,
                                    const QVector<PatternColor> &colors,
                                    QString *error) const {
@@ -1071,7 +1089,7 @@ bool PatternEngine::renderPatternKeeperImportPdf(const QString &pdfPath,
     const int pageH = pdf.height();
     const int margin = 75;
     const int headerH = 110;
-    const int footerH = 55;
+    const int footerH = 155;
 
     auto codeForKey = [](const PatternColor &c) {
         if (c.dmcCode.compare(QStringLiteral("White"), Qt::CaseInsensitive) == 0 ||
@@ -1194,8 +1212,9 @@ bool PatternEngine::renderPatternKeeperImportPdf(const QString &pdfPath,
                        Qt::AlignRight | Qt::AlignVCenter, QString::number(y));
         }
 
-        p.drawText(QRect(margin, pageH - margin - 30, pageW - margin * 2, 25),
+        p.drawText(QRect(margin, pageH - margin - 132, pageW - margin * 2, 25),
                    Qt::AlignCenter, QStringLiteral("Symbol key and thread lengths are on the final page."));
+        drawPdfDisclaimer(p, margin, pageW, pageH);
     };
 
     auto drawThreadLengthsAndSymbolKeyPage = [&]() {
@@ -1355,6 +1374,8 @@ bool PatternEngine::renderPatternKeeperImportPdf(const QString &pdfPath,
             p.drawText(QRect(x0 + symW + 8, yy, noW - 16, keyRowH), Qt::AlignCenter, codeForKey(pkColors[i]));
             p.drawText(QRect(x0 + symW + noW + 8, yy, nameW - 16, keyRowH), Qt::AlignLeft | Qt::AlignVCenter, pkColors[i].dmcName);
         }
+
+        drawPdfDisclaimer(p, margin, pageW, pageH);
     };
 
     drawChartPage(1);
@@ -1403,7 +1424,7 @@ bool PatternEngine::renderPdf(const QString &pdfPath,
     const int pageW = pdf.width();
     const int pageH = pdf.height();
     const int margin = 90;
-    const int footerH = 55;
+    const int footerH = 155;
     const bool useCompactLegend = options.legendPlacement == PatternOptions::LegendPlacement::SamePageWhenPossible && colors.size() <= 12;
     const int compactLegendH = useCompactLegend ? 300 : 0;
     const QString colorChartType = QStringLiteral("Color chart with symbols");
@@ -1650,6 +1671,7 @@ bool PatternEngine::renderPdf(const QString &pdfPath,
 
         p.drawText(QRect(margin, margin + 260, pageW - margin * 2, pageH - margin * 2 - 260),
                    Qt::AlignLeft | Qt::AlignTop, lines.join('\n'));
+        drawPdfDisclaimer(p, margin, pageW, pageH);
     };
 
     auto drawChart = [&](bool colorChart) {
@@ -1767,7 +1789,8 @@ bool PatternEngine::renderPdf(const QString &pdfPath,
         const QString footer = useCompactLegend
                 ? QStringLiteral("DMC legend is included on this page. Entries are sorted by DMC number.")
                 : QStringLiteral("Full DMC legend / shopping list starts on a following page. Legend entries are sorted by DMC number.");
-        p.drawText(QRect(margin, pageH - margin - 34, pageW - margin * 2, 28), Qt::AlignLeft | Qt::AlignVCenter, footer);
+        p.drawText(QRect(margin, pageH - margin - 132, pageW - margin * 2, 28), Qt::AlignLeft | Qt::AlignVCenter, footer);
+        drawPdfDisclaimer(p, margin, pageW, pageH);
     };
 
     auto drawLegendPage = [&](int startIndex) -> int {
@@ -1854,8 +1877,9 @@ bool PatternEngine::renderPdf(const QString &pdfPath,
         footerFont.setBold(false);
         p.setFont(footerFont);
         p.setPen(Qt::black);
-        p.drawText(QRect(margin, pageH - margin - 34, pageW - margin * 2, 28), Qt::AlignRight | Qt::AlignVCenter,
+        p.drawText(QRect(margin, pageH - margin - 132, pageW - margin * 2, 28), Qt::AlignRight | Qt::AlignVCenter,
                    QString("Legend entries %1-%2 of %3").arg(startIndex + 1).arg(i).arg(colors.size()));
+        drawPdfDisclaimer(p, margin, pageW, pageH);
         return i;
     };
 
@@ -1956,8 +1980,9 @@ bool PatternEngine::renderPdf(const QString &pdfPath,
         footerFont.setBold(false);
         p.setFont(footerFont);
         p.setPen(Qt::black);
-        p.drawText(QRect(margin, pageH - margin - 34, pageW - margin * 2, 28), Qt::AlignRight | Qt::AlignVCenter,
+        p.drawText(QRect(margin, pageH - margin - 132, pageW - margin * 2, 28), Qt::AlignRight | Qt::AlignVCenter,
                    QString("Pattern Keeper thread key entries %1-%2 of %3").arg(startIndex + 1).arg(i).arg(colors.size()));
+        drawPdfDisclaimer(p, margin, pageW, pageH);
         return i;
     };
 
