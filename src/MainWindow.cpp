@@ -9,9 +9,11 @@
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QDirIterator>
+#include <QEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFont>
 #include <QFrame>
 #include <QIcon>
 #include <QFormLayout>
@@ -39,6 +41,7 @@
 #include <QStringList>
 #include <QStandardPaths>
 #include <QTableWidget>
+#include <QTabWidget>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -149,15 +152,37 @@ void MainWindow::buildUi() {
     topLayout->addWidget(inputBox);
 
     auto *optionsBox = new QGroupBox("Pattern options", topPanel);
-    auto *optionsLayout = new QFormLayout(optionsBox);
+    auto *optionsBoxLayout = new QVBoxLayout(optionsBox);
+    optionsBoxLayout->setContentsMargins(8, 8, 8, 8);
+    optionsBoxLayout->setSpacing(6);
 
-    m_backgroundMode = new QComboBox(optionsBox);
+    auto *optionsTabs = new QTabWidget(optionsBox);
+    optionsBoxLayout->addWidget(optionsTabs);
+
+    auto createOptionsTab = [&](const QString &title) -> QFormLayout* {
+        auto *tab = new QWidget(optionsTabs);
+        auto *layout = new QFormLayout(tab);
+        layout->setContentsMargins(8, 8, 8, 8);
+        layout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+        layout->setRowWrapPolicy(QFormLayout::WrapLongRows);
+        optionsTabs->addTab(tab, title);
+        return layout;
+    };
+
+    auto *patternOptionsLayout = createOptionsTab("Pattern");
+    auto *chartPdfOptionsLayout = createOptionsTab("Chart / PDF");
+    auto *outputOptionsLayout = createOptionsTab("Output");
+    auto *patternOptionsTab = patternOptionsLayout->parentWidget();
+    auto *chartPdfOptionsTab = chartPdfOptionsLayout->parentWidget();
+    auto *outputOptionsTab = outputOptionsLayout->parentWidget();
+
+    m_backgroundMode = new QComboBox(patternOptionsTab);
     m_backgroundMode->addItem("Auto: transparent or edge color is unstitched", static_cast<int>(PatternOptions::BackgroundMode::AutoTransparentOrEdge));
     m_backgroundMode->addItem("Exact background color is unstitched", static_cast<int>(PatternOptions::BackgroundMode::ExactColor));
     m_backgroundMode->addItem("Stitch every visible pixel", static_cast<int>(PatternOptions::BackgroundMode::StitchEverything));
-    optionsLayout->addRow("Background:", m_backgroundMode);
+    patternOptionsLayout->addRow("Background:", m_backgroundMode);
 
-    auto *bgRow = new QWidget(optionsBox);
+    auto *bgRow = new QWidget(patternOptionsTab);
     auto *bgLayout = new QHBoxLayout(bgRow);
     bgLayout->setContentsMargins(0, 0, 0, 0);
     m_bgSwatch = new QLabel(bgRow);
@@ -168,134 +193,176 @@ void MainWindow::buildUi() {
     bgLayout->addWidget(m_bgSwatch);
     bgLayout->addWidget(m_bgColorButton);
     bgLayout->addStretch(1);
-    optionsLayout->addRow("Exact BG color:", bgRow);
+    patternOptionsLayout->addRow("Exact BG color:", bgRow);
 
-    m_transparencyUnstitchedCheck = new QCheckBox("Treat transparent pixels as unstitched background", optionsBox);
+    m_transparencyUnstitchedCheck = new QCheckBox("Treat transparent pixels as unstitched background", patternOptionsTab);
     m_transparencyUnstitchedCheck->setChecked(true);
     m_transparencyUnstitchedCheck->setToolTip("Recommended for sprites. If unchecked, fully transparent pixels can be interpreted as stitches using their stored RGB values.");
-    optionsLayout->addRow("Transparency:", m_transparencyUnstitchedCheck);
+    patternOptionsLayout->addRow(m_transparencyUnstitchedCheck);
 
-    m_dmcCheck = new QCheckBox("Match sprite colors to nearest DMC floss", optionsBox);
+    m_dmcCheck = new QCheckBox("Match sprite colors to nearest DMC floss", patternOptionsTab);
     m_dmcCheck->setChecked(true);
-    optionsLayout->addRow("DMC:", m_dmcCheck);
+    patternOptionsLayout->addRow(m_dmcCheck);
 
-    m_colorCleanupCombo = new QComboBox(optionsBox);
+    m_colorCleanupCombo = new QComboBox(patternOptionsTab);
     m_colorCleanupCombo->addItem("Exact/nearest DMC only", static_cast<int>(PatternOptions::ColorCleanupMode::None));
     m_colorCleanupCombo->addItem("Merge very similar colors", static_cast<int>(PatternOptions::ColorCleanupMode::MergeSimilarColors));
     m_colorCleanupCombo->addItem("Limit max colors", static_cast<int>(PatternOptions::ColorCleanupMode::LimitMaxColors));
-    optionsLayout->addRow("Color cleanup:", m_colorCleanupCombo);
+    patternOptionsLayout->addRow("Color cleanup:", m_colorCleanupCombo);
 
-    m_mergeToleranceSpin = new QSpinBox(optionsBox);
+    m_mergeToleranceSpin = new QSpinBox(patternOptionsTab);
     m_mergeToleranceSpin->setRange(0, 80);
     m_mergeToleranceSpin->setValue(18);
     m_mergeToleranceSpin->setSuffix(" tolerance");
     m_mergeToleranceSpin->setToolTip("Higher values merge more near-identical shades. Start around 12–24 for anti-aliased sprites.");
-    optionsLayout->addRow("Merge strength:", m_mergeToleranceSpin);
+    patternOptionsLayout->addRow("Merge strength:", m_mergeToleranceSpin);
 
-    m_maxColorsSpin = new QSpinBox(optionsBox);
+    m_maxColorsSpin = new QSpinBox(patternOptionsTab);
     m_maxColorsSpin->setRange(2, 80);
     m_maxColorsSpin->setValue(24);
     m_maxColorsSpin->setSuffix(" colors");
     m_maxColorsSpin->setToolTip("When limiting colors, the most-used colors are kept and rare colors are remapped to the nearest kept color.");
-    optionsLayout->addRow("Max colors:", m_maxColorsSpin);
+    patternOptionsLayout->addRow("Max colors:", m_maxColorsSpin);
 
-    m_chartStyleCombo = new QComboBox(optionsBox);
+    m_chartStyleCombo = new QComboBox(chartPdfOptionsTab);
     m_chartStyleCombo->addItem("Both: color chart + Pattern Keeper symbol chart", QStringLiteral("both"));
     m_chartStyleCombo->addItem("Color chart only", QStringLiteral("color"));
     m_chartStyleCombo->addItem("Pattern Keeper symbol chart only", QStringLiteral("symbols"));
-    optionsLayout->addRow("Chart style:", m_chartStyleCombo);
+    chartPdfOptionsLayout->addRow("Chart style:", m_chartStyleCombo);
 
-    m_symbolStyleCombo = new QComboBox(optionsBox);
+    m_symbolStyleCombo = new QComboBox(chartPdfOptionsTab);
     m_symbolStyleCombo->addItem("Clean cross-stitch symbols", static_cast<int>(PatternOptions::SymbolStyle::Clean));
     m_symbolStyleCombo->addItem("Simple black icon symbols", static_cast<int>(PatternOptions::SymbolStyle::SimpleIcons));
     m_symbolStyleCombo->addItem("Classic SpriteStitch symbols", static_cast<int>(PatternOptions::SymbolStyle::Classic));
     m_symbolStyleCombo->setToolTip("Choose the symbol family used in chart previews, PDFs, and the legend. The clean and icon styles are inspired by simple cross-stitch chart symbols.");
-    optionsLayout->addRow("Symbol set:", m_symbolStyleCombo);
+    chartPdfOptionsLayout->addRow("Symbol set:", m_symbolStyleCombo);
 
-    m_gridSizeCombo = new QComboBox(optionsBox);
+    m_gridSizeCombo = new QComboBox(chartPdfOptionsTab);
     m_gridSizeCombo->addItem("Small", static_cast<int>(PatternOptions::GridSize::Small));
     m_gridSizeCombo->addItem("Medium", static_cast<int>(PatternOptions::GridSize::Medium));
     m_gridSizeCombo->addItem("Large", static_cast<int>(PatternOptions::GridSize::Large));
     m_gridSizeCombo->setCurrentIndex(1);
-    optionsLayout->addRow("Grid size:", m_gridSizeCombo);
+    chartPdfOptionsLayout->addRow("Grid size:", m_gridSizeCombo);
 
-    m_legendPlacementCombo = new QComboBox(optionsBox);
+    m_legendPlacementCombo = new QComboBox(chartPdfOptionsTab);
     m_legendPlacementCombo->addItem("Separate legend page", static_cast<int>(PatternOptions::LegendPlacement::SeparatePage));
     m_legendPlacementCombo->addItem("Same page when possible", static_cast<int>(PatternOptions::LegendPlacement::SamePageWhenPossible));
-    optionsLayout->addRow("Legend:", m_legendPlacementCombo);
+    chartPdfOptionsLayout->addRow("Legend:", m_legendPlacementCombo);
 
-    m_pageOrientationCombo = new QComboBox(optionsBox);
+    m_pageOrientationCombo = new QComboBox(chartPdfOptionsTab);
     m_pageOrientationCombo->addItem("Auto", static_cast<int>(PatternOptions::PageOrientation::Auto));
     m_pageOrientationCombo->addItem("Portrait", static_cast<int>(PatternOptions::PageOrientation::Portrait));
     m_pageOrientationCombo->addItem("Landscape", static_cast<int>(PatternOptions::PageOrientation::Landscape));
-    optionsLayout->addRow("Page orientation:", m_pageOrientationCombo);
+    chartPdfOptionsLayout->addRow("Page orientation:", m_pageOrientationCombo);
 
-    m_csvCheck = new QCheckBox("Write CSV legend/shopping list", optionsBox);
+    m_csvCheck = new QCheckBox("Write CSV legend/shopping list", outputOptionsTab);
     m_csvCheck->setChecked(true);
-    m_previewPngCheck = new QCheckBox("Write website PNG preview", optionsBox);
+    m_previewPngCheck = new QCheckBox("Write website PNG preview", outputOptionsTab);
     m_previewPngCheck->setChecked(true);
     m_previewPngCheck->setToolTip("Creates a transparent-background PNG from the final stitched pattern grid for website previews.");
-    m_centerLinesCheck = new QCheckBox("Draw red center lines", optionsBox);
+    m_centerLinesCheck = new QCheckBox("Draw red center lines", chartPdfOptionsTab);
     m_centerLinesCheck->setChecked(true);
-    m_coverPageCheck = new QCheckBox("Include cover page", optionsBox);
-    m_openFolderCheck = new QCheckBox("Open output folder after generating", optionsBox);
-    m_openPdfCheck = new QCheckBox("Open generated PDF after generating", optionsBox);
+    m_coverPageCheck = new QCheckBox("Include cover page", chartPdfOptionsTab);
+    m_openFolderCheck = new QCheckBox("Open output folder after generating", outputOptionsTab);
+    m_openPdfCheck = new QCheckBox("Open generated PDF after generating", outputOptionsTab);
 
-    auto *checks = new QWidget(optionsBox);
-    auto *checksLayout = new QVBoxLayout(checks);
-    checksLayout->setContentsMargins(0, 0, 0, 0);
-    checksLayout->addWidget(m_centerLinesCheck);
-    checksLayout->addWidget(m_coverPageCheck);
-    checksLayout->addWidget(m_csvCheck);
-    checksLayout->addWidget(m_previewPngCheck);
-    checksLayout->addWidget(m_openPdfCheck);
-    checksLayout->addWidget(m_openFolderCheck);
-    optionsLayout->addRow("Extras:", checks);
+    chartPdfOptionsLayout->addRow(m_centerLinesCheck);
+    chartPdfOptionsLayout->addRow(m_coverPageCheck);
+    outputOptionsLayout->addRow(m_csvCheck);
+    outputOptionsLayout->addRow(m_previewPngCheck);
+    outputOptionsLayout->addRow(m_openPdfCheck);
+    outputOptionsLayout->addRow(m_openFolderCheck);
 
     topLayout->addWidget(optionsBox);
 
-    auto *buttonRow = new QWidget(topPanel);
-    auto *buttonLayout = new QGridLayout(buttonRow);
-    buttonLayout->setContentsMargins(0, 0, 0, 0);
-    buttonLayout->setHorizontalSpacing(6);
-    buttonLayout->setVerticalSpacing(6);
+    auto *actionsBox = new QGroupBox("Actions", topPanel);
+    auto *actionsLayout = new QGridLayout(actionsBox);
+    actionsLayout->setContentsMargins(8, 8, 8, 8);
+    actionsLayout->setHorizontalSpacing(8);
+    actionsLayout->setVerticalSpacing(8);
 
-    m_generateButton = new QPushButton("Generate PDF", buttonRow);
-    m_openPdfButton = new QPushButton("Open PDF", buttonRow);
+    auto addActionSection = [&](const QString &title, int row, int column, int columnSpan) -> QGridLayout* {
+        auto *section = new QWidget(actionsBox);
+        auto *sectionLayout = new QVBoxLayout(section);
+        sectionLayout->setContentsMargins(0, 0, 0, 0);
+        sectionLayout->setSpacing(4);
+
+        auto *heading = new QLabel(title, section);
+        QFont headingFont = heading->font();
+        headingFont.setBold(true);
+        heading->setFont(headingFont);
+        sectionLayout->addWidget(heading);
+
+        auto *buttonLayout = new QGridLayout;
+        buttonLayout->setContentsMargins(0, 0, 0, 0);
+        buttonLayout->setHorizontalSpacing(6);
+        buttonLayout->setVerticalSpacing(6);
+        sectionLayout->addLayout(buttonLayout);
+
+        actionsLayout->addWidget(section, row, column, 1, columnSpan);
+        return buttonLayout;
+    };
+
+    auto *mainActionLayout = addActionSection("Main action", 0, 0, 2);
+    auto *projectLayout = addActionSection("Project", 1, 0, 1);
+    auto *foldersLayout = addActionSection("Folders", 1, 1, 1);
+    auto *toolsLayout = addActionSection("Tools", 2, 0, 2);
+
+    m_generateButton = new QPushButton("Generate PDF", actionsBox);
+    m_openPdfButton = new QPushButton("Open PDF", actionsBox);
     m_openPdfButton->setEnabled(false);
-    m_openFolderButton = new QPushButton("Open folder", buttonRow);
-    m_reviewPaletteButton = new QPushButton("Edit palette...", buttonRow);
-    auto *saveProjectButton = new QPushButton("Save project", buttonRow);
-    auto *loadProjectButton = new QPushButton("Load project", buttonRow);
-    auto *useWorkFoldersButton = new QPushButton("Use work folders", buttonRow);
-    auto *openSpritesButton = new QPushButton("Open sprites", buttonRow);
-    auto *openPatternsButton = new QPushButton("Open patterns", buttonRow);
-    auto *resetButton = new QPushButton("Reset settings", buttonRow);
+    m_openFolderButton = new QPushButton("Open folder", actionsBox);
+    m_reviewPaletteButton = new QPushButton("Edit palette...", actionsBox);
+    auto *saveProjectButton = new QPushButton("Save project", actionsBox);
+    auto *loadProjectButton = new QPushButton("Load project", actionsBox);
+    auto *useWorkFoldersButton = new QPushButton("Use work folders", actionsBox);
+    auto *openSpritesButton = new QPushButton("Open sprites", actionsBox);
+    auto *openPatternsButton = new QPushButton("Open patterns", actionsBox);
+    auto *resetButton = new QPushButton("Reset settings", actionsBox);
 
     QList<QPushButton*> actionButtons = {
         m_generateButton,
+        m_openPdfButton,
+        m_openFolderButton,
         m_reviewPaletteButton,
         saveProjectButton,
         loadProjectButton,
         useWorkFoldersButton,
         openSpritesButton,
         openPatternsButton,
-        m_openPdfButton,
-        m_openFolderButton,
         resetButton
     };
 
-    int buttonIndex = 0;
     for (auto *button : actionButtons) {
-        button->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-        buttonLayout->addWidget(button, buttonIndex / 3, buttonIndex % 3);
-        ++buttonIndex;
+        button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     }
+    m_generateButton->setMinimumHeight(34);
 
-    buttonLayout->setColumnStretch(0, 1);
-    buttonLayout->setColumnStretch(1, 1);
-    buttonLayout->setColumnStretch(2, 1);
-    topLayout->addWidget(buttonRow);
+    mainActionLayout->addWidget(m_generateButton, 0, 0, 1, 2);
+    mainActionLayout->addWidget(m_openPdfButton, 1, 0);
+    mainActionLayout->addWidget(m_openFolderButton, 1, 1);
+    mainActionLayout->setColumnStretch(0, 1);
+    mainActionLayout->setColumnStretch(1, 1);
+
+    projectLayout->addWidget(saveProjectButton, 0, 0);
+    projectLayout->addWidget(loadProjectButton, 0, 1);
+    projectLayout->setColumnStretch(0, 1);
+    projectLayout->setColumnStretch(1, 1);
+
+    foldersLayout->addWidget(useWorkFoldersButton, 0, 0, 1, 2);
+    foldersLayout->addWidget(openSpritesButton, 1, 0);
+    foldersLayout->addWidget(openPatternsButton, 1, 1);
+    foldersLayout->setColumnStretch(0, 1);
+    foldersLayout->setColumnStretch(1, 1);
+
+    toolsLayout->addWidget(m_reviewPaletteButton, 0, 0);
+    toolsLayout->addWidget(resetButton, 0, 1);
+    toolsLayout->setColumnStretch(0, 1);
+    toolsLayout->setColumnStretch(1, 1);
+
+    actionsLayout->setColumnStretch(0, 1);
+    actionsLayout->setColumnStretch(1, 1);
+    topLayout->addWidget(actionsBox);
     topLayout->addStretch(1);
 
     auto *topScroll = makeScrollPanel(topPanel);
@@ -407,6 +474,7 @@ void MainWindow::buildUi() {
     m_previewScrollArea->setFrameShape(QFrame::NoFrame);
     m_previewScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_previewScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_previewScrollArea->viewport()->installEventFilter(this);
     previewLayout->addWidget(m_previewScrollArea, 1);
 
     m_rightSplitter->addWidget(infoScroll);
@@ -466,6 +534,13 @@ void MainWindow::buildUi() {
 void MainWindow::resizeEvent(QResizeEvent *event) {
     QMainWindow::resizeEvent(event);
     refreshPreviewScale();
+}
+
+bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
+    if (m_previewScrollArea && watched == m_previewScrollArea->viewport() && event->type() == QEvent::Resize) {
+        refreshPreviewScale();
+    }
+    return QMainWindow::eventFilter(watched, event);
 }
 
 void MainWindow::updatePreview() {
@@ -578,7 +653,7 @@ void MainWindow::refreshPreviewScale() {
 
     QSize available(320, 240);
     if (m_previewScrollArea && m_previewScrollArea->viewport()) {
-        available = m_previewScrollArea->viewport()->size() - QSize(12, 12);
+        available = m_previewScrollArea->viewport()->size();
     }
     if (available.width() <= 0 || available.height() <= 0) return;
 
@@ -587,8 +662,10 @@ void MainWindow::refreshPreviewScale() {
 
     m_previewLabel->setText(QString());
     m_previewLabel->setPixmap(rendered);
-    m_previewLabel->setMinimumSize(rendered.size());
-    m_previewLabel->resize(rendered.size());
+    const QString mode = m_previewScaleCombo ? m_previewScaleCombo->currentData().toString() : QStringLiteral("fit");
+    const QSize labelSize = mode == QStringLiteral("fit") ? available : rendered.size();
+    m_previewLabel->setMinimumSize(labelSize);
+    m_previewLabel->resize(labelSize);
 }
 
 QPixmap MainWindow::buildPreviewPixmap(const QSize &availableSize) const {
@@ -606,8 +683,12 @@ QPixmap MainWindow::buildPreviewPixmap(const QSize &availableSize) const {
     QSize outputSize;
 
     if (mode == QStringLiteral("fit")) {
-        outputSize = m_previewImage.size();
-        outputSize.scale(availableSize.expandedTo(QSize(32, 32)), Qt::KeepAspectRatio);
+        const QSize boundedSize = availableSize.expandedTo(QSize(1, 1));
+        const double widthScale = boundedSize.width() / static_cast<double>(std::max(1, m_previewImage.width()));
+        const double heightScale = boundedSize.height() / static_cast<double>(std::max(1, m_previewImage.height()));
+        const double scale = std::min(widthScale, heightScale);
+        outputSize = QSize(std::max(1, qRound(m_previewImage.width() * scale)),
+                           std::max(1, qRound(m_previewImage.height() * scale)));
     } else {
         bool ok = false;
         const int factor = std::max(1, mode.toInt(&ok));
